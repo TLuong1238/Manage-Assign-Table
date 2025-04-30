@@ -1,0 +1,139 @@
+import { Alert, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native'
+import React, { useRef, useState } from 'react'
+import * as Icon from 'react-native-feather'
+import { theme } from '../constants/theme'
+import ScreenWrapper from '../components/ScreenWrapper'
+import BackButton from '../components/BackButton'
+import { hp, wp } from '../helper/common'
+import Input from '../components/Input'
+import Button from '../components/Button'
+import { useNavigation } from '@react-navigation/native'
+import { supabase } from '../lib/supabase'
+
+const SignUpScr = () => {
+  const navigation = useNavigation();
+
+  const nameRef = useRef(null);
+  const emailRef = useRef(null);
+  const passwordRef = useRef(null);
+  const [loading, setLoading] = useState(false);
+
+  const onSubmit = async () => {
+    if(!emailRef.current || !passwordRef.current|| !nameRef.current) {
+      Alert.alert('Thông báo', 'Vui lòng nhập đầy đủ thông tin!');
+      return;
+    }
+        
+    let name = nameRef.current.trim();
+    let email = emailRef.current.trim();
+    let password = passwordRef.current.trim();
+
+    setLoading(true);
+
+    const {data: {session},error} = await supabase.auth.signUp({
+      email: email,
+      password: password,
+      options: {
+        data: {
+           name,
+        }
+      }
+    });
+
+    setLoading(false);
+    // console.log('session',session);
+    // console.log('error',error);
+    
+    if(error) {
+      Alert.alert('Thông báo', error.message);
+      return;
+    }
+
+
+  }
+
+  return (
+    <ScreenWrapper bg = 'white'>
+      <StatusBar style="dark" />
+      <View style={styles.container}>
+        <BackButton />
+        {/* welcomm */}
+        <View>
+          <Text style={styles.welcomText} >Let's</Text>
+          <Text style={styles.welcomText} >Get Started!</Text>
+        </View>
+        {/* form */}
+        <View style={{ gap: 20 }}>
+          <Text style={{ fontSize: hp(2.5), fontWeight: '500', color: theme.colors.text }}>
+            Please enter the details to create a new account!
+          </Text>
+          
+          <Input 
+            icon={<Icon.User stroke ={theme.colors.dark} strokeWidth={2} width={26} height={26} />}
+            placeholder='Nhập họ và tên của bạn...'
+            onChangeText = {value => nameRef.current = value}  
+          />
+          <Input 
+            icon={<Icon.Mail stroke ={theme.colors.dark} strokeWidth={2} width={26} height={26} />}
+            placeholder='Nhập email của bạn...'
+            onChangeText = {value => emailRef.current = value}  
+          />
+          <Input 
+            icon={<Icon.Lock stroke ={theme.colors.dark} strokeWidth={2} width={26} height={26} />}
+            placeholder='Nhập mật khẩu của bạn...'
+            secureTextEntry
+            onChangeText = {value => passwordRef.current = value}  
+          />
+          {/* <Text style = {styles.forgotPasswordText}>
+            Quên mật khẩu?
+          </Text> */}
+          <Button title='Đăng ký' loading={loading} onPress = {onSubmit} />
+          {/* footer */}
+          <View style = {styles.footer}>
+            <Text style = {styles.footerText}>Đã có tài khoản?</Text>
+            {/* <Pressable onPress = {() => navigation.navigate('Login')}> */}
+            <Pressable onPress={() => router.push('/LoginScr')}>
+              <Text style = {{color:theme.colors.primary, fontSize: hp(2.5), fontWeight: '500'}}>
+                Đăng nhập!
+              </Text>
+            </Pressable>
+
+          </View>
+        </View>
+
+      </View>
+
+    </ScreenWrapper>
+  )
+}
+
+export default SignUpScr
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    gap: 45,
+    paddingHorizontal: wp(2),
+    paddingTop: wp(2),
+  },
+  welcomText: {
+    fontSize: hp(4),
+    fontWeight: '700',
+    color: theme.colors.text,
+    marginTop: wp(2),
+  },  
+  forgotPasswordText:{
+    textAlign: 'right',
+    fontSize: hp(2.5),
+    fontWeight: '500',
+    color: theme.colors.text,
+  },
+  footer:{
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 5,
+  },
+
+
+})
