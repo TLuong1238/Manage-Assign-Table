@@ -1,4 +1,4 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Image, Pressable, Alert } from 'react-native'
 import React, { useRef, useState } from 'react'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import Header from '../../components/Header'
@@ -8,6 +8,12 @@ import { useAuth } from '../../context/AuthContext'
 import Avatar from '../../components/Avatar'
 import RichTextEditor from '../../components/RichTextEditor'
 import { useRouter } from 'expo-router'
+import * as Icon from "react-native-feather"
+import MyButton from '../../components/MyButton'
+import * as ImagePicker from 'expo-image-picker';
+import { getSupabaseFileUrl } from '../../services/imageService'
+import { Video } from 'expo-av';
+
 
 const NewPostScr = () => {
 
@@ -18,13 +24,66 @@ const NewPostScr = () => {
   const [loading, setLoading] = useState(false);
   const [file, setFile] = useState(file);
 
+  const onPick = async (isImage) => {
+    try {
+      const mediaConfig = {
+        allowsEditing: false,
+        quality: 0.7,
+        mediaTypes: isImage
+          ? 'images'
+          : 'videos',
+        aspect: isImage ? [1, 1] : undefined
+      };
+
+      const result = await ImagePicker.launchImageLibraryAsync(mediaConfig);
+
+      if (!result.canceled && result.assets[0]) {
+        setFile(result.assets[0]);
+      }
+    } catch (error) {
+      console.error('Error picking media:', error);
+      Alert.alert('Lỗi', 'Không thể chọn media, vui lòng thử lại');
+    }
+  }
+
+  const isLocalFile = file => {
+    if (!file) return null;
+    if (typeof (file) == 'object') {
+      return typeof (file)
+    }
+    return fail
+  }
+
+  const getFileType = file => {
+    if (!file) return null;
+    if (isLocalFile(file)) {
+      return file.type;
+    }
+    //Chech file type
+    if (file.includes('postImage')) {
+      return 'images';
+    }
+    return 'videos';
+  }
+
+  const getFIleUri = file => {
+    if (!file) return null;
+    if (isLocalFile(file)) return file.uri;
+
+    return getSupabaseFileUrl(file)?.uri;
+  }
+  const onSubmit = async () => {
+    if(!bodyRef.current || !file){
+      Alert.alert("Thông báo!", "Hãy nêu suy nghĩ cả bạn hoặc thêm ảnh và videp!")
+    }
+  }
 
 
   return (
     <ScreenWrapper bg={'white'}>
       <View style={styles.container}>
         <Header title={"Đăng bài"} />
-        <ScrollView contentContainerStyle={{ gap: 20 }}>
+        <ScrollView contentContainerStyle={{ gap: 20 }} showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
             <Avatar
               uri={user?.image}
@@ -32,7 +91,7 @@ const NewPostScr = () => {
               rounded={30}
             />
             <View style={{ gap: 2 }}>
-              <Text style={styles.userName}> 
+              <Text style={styles.userName}>
                 {user && user.name}
               </Text>
               <Text style={styles.publicText}>
@@ -41,10 +100,50 @@ const NewPostScr = () => {
             </View>
           </View>
           {/* editor */}
-          <View style = {styles.textEditor}>
-            <RichTextEditor editorRef = {editorRef} onChange = {body => bodyRef.current = body} />
+          <View style={styles.textEditor}>
+            <RichTextEditor editorRef={editorRef} onChange={body => bodyRef.current = body} />
+          </View>
+          {
+            file && (
+              <View style={styles.file}>
+                {
+                  getFileType(file) == 'video' ? (
+                    <Video
+                      style ={{flex : 1}}
+                      source={{uri: getFIleUri(file)}}
+                      useNativeControls
+                      isLooping
+                      resizeMode='cover'
+                    />
+                  ) : (
+                    <Image source={{ uri: getFIleUri(file) }} resizeMode='cover' style={{ flex: 1 }} />
+                  )
+                }
+                <Pressable style={styles.deleteIcon} onPress={() => setFile(null)}>
+                  <Icon.Trash2 stroke={'white'} height={18} width={18} />
+                </Pressable>
+              </View>
+            )
+          }
+          <View style={styles.media}>
+            <Text style={styles.addImageText}>Thêm vào bài đăng của bạn</Text>
+            <View style={styles.mediaIcon}>
+              <TouchableOpacity onPress={() => onPick(true)}>
+                <Icon.Image height={30} width={30} color={theme.colors.dark} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => onPick(false)}>
+                <Icon.Video height={30} width={30} color={theme.colors.dark} />
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
+        <MyButton
+          title='Đăng bài'
+          buttonStyle={{ height: hp(6) }}
+          loading={loading}
+          hasShadow={false}
+          onPress={onSubmit}
+        />
       </View>
     </ScreenWrapper>
   )
@@ -74,7 +173,7 @@ const styles = StyleSheet.create({
     fontSize: hp(3),
     fontWeight: 'semibold',
   },
-  avatar:{
+  avatar: {
     height: hp(6.5),
     width: hp(6.5),
     borderRadius: '20',
@@ -86,6 +185,48 @@ const styles = StyleSheet.create({
     fontSize: hp(2),
     fontWeight: '200',
     color: theme.colors.textLight,
+  },
+  media: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    padding: 12,
+    paddingHorizontal: 18,
+    borderRadius: 20,
+    borderCurve: "continuous",
+    borderColor: 'gray'
+  },
+  mediaIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 15
+  },
+  imageIcon: {
+    borderRadius: 12
+  },
+  addImageText: {
+    fontSize: hp(1.9),
+    fontWeight: 'semibold',
+    color: theme.colors.text
+  },
+  file: {
+    height: hp(40),
+    width: '100%',
+    borderRadius: 15,
+    overflow: 'hidden',
+    borderCurve: 'continuous',
+  },
+  video: {
+
+  },
+  deleteIcon: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    padding: 5,
+    backgroundColor: 'rgba(255,0,0,0.6)',
+    borderRadius: 20
   }
 
 })

@@ -46,6 +46,7 @@ const RichTextEditor = ({
                 editorStyle={styles.contentStyle}
                 placeholder={"Bạn đang nghĩ gì?"}
                 onChange={onChange}
+                showsVerticalScrollIndicator= {false}
             
             />
         </View>

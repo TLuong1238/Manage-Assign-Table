@@ -6,7 +6,7 @@ import ScreenWrapper from '../components/ScreenWrapper'
 import BackButton from '../components/BackButton'
 import { hp, wp } from '../helper/common'
 import Input from '../components/Input'
-import Button from '../components/Button'
+import MyButton from '../components/MyButton'
 import { useNavigation } from '@react-navigation/native'
 import { supabase } from '../lib/supabase'
 import { useRouter } from 'expo-router'
@@ -74,7 +74,7 @@ const LoginScr = () => {
           <Text style={styles.forgotPasswordText}>
             Quên mật khẩu?
           </Text>
-          <Button title='Đăng nhập' loading={loading} onPress={onSubmit} />
+          <MyButton title='Đăng nhập' loading={loading} onPress={onSubmit} />
           {/* footer */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>Bạn chưa có tài khoản?</Text>

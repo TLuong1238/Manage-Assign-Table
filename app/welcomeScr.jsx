@@ -4,7 +4,7 @@ import ScreenWrapper from '../components/ScreenWrapper'
 import { StyleSheet } from 'react-native'
 import { hp, wp } from '../helper/common'
 import { theme } from '../constants/theme'
-import Button from '../components/Button'
+import MyButton from '../components/MyButton'
 import { useNavigation, useRouter } from 'expo-router'
 //
 
@@ -23,7 +23,7 @@ const WelcomeScr = () => {
         </View>
         {/* Footer */}
         <View style={styles.footer}>
-          <Button
+          <MyButton
             title="Get Started"
             buttonSyle={{ marginHorizontal: wp(3) }}
             // onPress={() => navigation.navigate('SignUp')}

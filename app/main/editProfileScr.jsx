@@ -8,7 +8,7 @@ import { useAuth } from '../../context/AuthContext'
 import { getUserImageSrc, uploadFile } from '../../services/imageService'
 import * as Icon from 'react-native-feather'
 import Input from '../../components/Input'
-import Button from '../../components/Button'
+import MyButton from '../../components/MyButton'
 import { updateUserData } from '../../services/userService'
 import { useRouter } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker';
@@ -163,7 +163,7 @@ const EditProfileScr = () => {
                             value={user.bio}
                             onChangeText={value => setUser({ ...user, bio: value })}
                         />
-                        <Button title='Cập nhật' loading={loading} onPress={onSubmit} />
+                        <MyButton title='Cập nhật' loading={loading} onPress={onSubmit} />
                     </View>
                 </ScrollView>
 
