@@ -14,6 +14,7 @@ const ProfileScr = () => {
   const { user, setAuth } = useAuth();
   const router = useRouter();
 
+  // console.log('userData:', user);
   const onLogout = async () => {
     setAuth(null);
     const { error } = await supabase.auth.signOut();
@@ -54,7 +55,7 @@ const UserHeader = ({ user, router, handleLogout }) => {
           <Icon.Power strokeWidth={2} width={wp(5)} height={wp(5)} color={'red'} />
         </TouchableOpacity>
       </View>
-      {/* profile ìno */}
+      {/* profile info */}
       <View style={styles.container}>
         <View style={{ gap: 15 }}>
           {/* avatar */}

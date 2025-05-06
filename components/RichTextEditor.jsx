@@ -10,7 +10,7 @@ const RichTextEditor = ({
     return (
         <View style={{ minHeight: 285 }}>
             <RichToolbar
-                
+
                 actions={[
                     // actions.insertImage,
                     actions.setBold,
@@ -29,25 +29,27 @@ const RichTextEditor = ({
                     actions.undo,
                     actions.redo,
                 ]}
-                iconMap = {{
-                    [actions.heading1] : ({tintColor}) => <Text style ={{color: tintColor}}>H1</Text>,
-                    [actions.heading4] : ({tintColor}) => <Text style ={{color: tintColor}}>H4</Text>,
+                iconMap={{
+                    [actions.heading1]: ({ tintColor }) => <Text style={{ color: tintColor }}>H1</Text>,
+                    [actions.heading4]: ({ tintColor }) => <Text style={{ color: tintColor }}>H4</Text>,
                 }}
-                style = {styles.richBar}
-                flatContainerStyle = {styles.listStyle}
-                selectedIconTint = {theme.colors.primaryDark}
-                editor = {editorRef}
-                disabled = {false}
+                style={styles.richBar}
+                flatContainerStyle={styles.listStyle}
+                selectedIconTint={theme.colors.primaryDark}
+                editor={editorRef}
+                disabled={false}
             />
             {/* editor */}
-            <RichEditor 
-                ref = {editorRef}
-                containerStyle = {styles.rich}
-                editorStyle={styles.contentStyle}
+            <RichEditor
+                ref={editorRef}
+                containerStyle={styles.rich}
+                editorStyle={{
+                    backgroundColor: 'white',
+                    padding: 10,
+                }}
                 placeholder={"Bạn đang nghĩ gì?"}
                 onChange={onChange}
-                showsVerticalScrollIndicator= {false}
-            
+                showsVerticalScrollIndicator={false}
             />
         </View>
     )
@@ -56,9 +58,9 @@ const RichTextEditor = ({
 export default RichTextEditor
 
 const styles = StyleSheet.create({
-    richBar:{
-        borderTopLeftRadius:20,
-        borderTopRightRadius:20,
+    richBar: {
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
         backgroundColor: theme.colors.gray
     },
     rich: {
@@ -69,12 +71,12 @@ const styles = StyleSheet.create({
         borderBottomLeftRadius: 20,
         borderBottomRightRadius: 20,
         backgroundColor: 'white',
-        borderTopWidth:0 ,
+        borderTopWidth: 0,
         padding: 5
     },
     contentStyle: {
         backgroundColor: 'white',
-        padding: 10,    
+        padding: 10,
     },
     listStyle: {
         paddingHorizontal: 8,

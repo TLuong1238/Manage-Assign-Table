@@ -13,6 +13,7 @@ import MyButton from '../../components/MyButton'
 import * as ImagePicker from 'expo-image-picker';
 import { getSupabaseFileUrl } from '../../services/imageService'
 import { Video } from 'expo-av';
+import { createOrUpdatePost } from '../../services/postServices'
 
 
 const NewPostScr = () => {
@@ -23,6 +24,9 @@ const NewPostScr = () => {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [file, setFile] = useState(file);
+
+  console.log('user: ', user?.data);
+
 
   const onPick = async (isImage) => {
     try {
@@ -51,7 +55,7 @@ const NewPostScr = () => {
     if (typeof (file) == 'object') {
       return typeof (file)
     }
-    return fail
+    return false
   }
 
   const getFileType = file => {
@@ -60,10 +64,10 @@ const NewPostScr = () => {
       return file.type;
     }
     //Chech file type
-    if (file.includes('postImage')) {
-      return 'images';
+    if (file.includes('postImages')) {
+      return 'image';
     }
-    return 'videos';
+    return 'video';
   }
 
   const getFIleUri = file => {
@@ -74,8 +78,29 @@ const NewPostScr = () => {
   }
   const onSubmit = async () => {
     if(!bodyRef.current || !file){
-      Alert.alert("Thông báo!", "Hãy nêu suy nghĩ cả bạn hoặc thêm ảnh và videp!")
+      Alert.alert("Thông báo!", "Hãy nêu suy nghĩ cả bạn hoặc thêm ảnh và video!");
+      return;
     }
+
+    let data = {
+      file,
+      body: bodyRef.current,
+      userId: user?.id,
+    }
+    console.log('userId:', data.userId )
+    //create Post
+    
+    setLoading(true);
+    let res = await createOrUpdatePost(data);
+    setLoading(false);
+    //
+    console.log('post res: ',res);
+
+    // console.log('body: ',bodyRef.current);
+    // console.log('file: ',file);
+
+
+
   }
 
 
@@ -116,7 +141,8 @@ const NewPostScr = () => {
                       resizeMode='cover'
                     />
                   ) : (
-                    <Image source={{ uri: getFIleUri(file) }} resizeMode='cover' style={{ flex: 1 }} />
+                    <Image source={{ uri: getFIleUri(file) }} resizeMode='cover' 
+                    style={{ flex: 1, width: '100%', height: '100%' }} />
                   )
                 }
                 <Pressable style={styles.deleteIcon} onPress={() => setFile(null)}>
@@ -214,7 +240,6 @@ const styles = StyleSheet.create({
     height: hp(40),
     width: '100%',
     borderRadius: 15,
-    overflow: 'hidden',
     borderCurve: 'continuous',
   },
   video: {

@@ -9,10 +9,11 @@ import Input from '../components/Input'
 import MyButton from '../components/MyButton'
 import { useNavigation } from '@react-navigation/native'
 import { supabase } from '../lib/supabase'
+import { useRouter } from 'expo-router'
 
 const SignUpScr = () => {
   const navigation = useNavigation();
-
+  const router = useRouter();
   const nameRef = useRef(null);
   const emailRef = useRef(null);
   const passwordRef = useRef(null);
@@ -92,7 +93,7 @@ const SignUpScr = () => {
           <View style = {styles.footer}>
             <Text style = {styles.footerText}>Đã có tài khoản?</Text>
             {/* <Pressable onPress = {() => navigation.navigate('Login')}> */}
-            <Pressable onPress={() => router.push('/LoginScr')}>
+            <Pressable onPress={() => router.push('/loginScr')}>
               <Text style = {{color:theme.colors.primary, fontSize: hp(2.5), fontWeight: '500'}}>
                 Đăng nhập!
               </Text>

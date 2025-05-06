@@ -13,6 +13,8 @@ import Avatar from '../../components/Avatar'
 const HomeScr = () => {
   const {user, setAuth } = useAuth();
   const router =useRouter();
+
+  //log user
   console.log('userInfor:', user);
 
   // const onLogout = async () => {
