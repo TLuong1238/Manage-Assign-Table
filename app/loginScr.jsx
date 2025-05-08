@@ -3,9 +3,9 @@ import React, { useRef, useState } from 'react'
 import * as Icon from 'react-native-feather'
 import { theme } from '../constants/theme'
 import ScreenWrapper from '../components/ScreenWrapper'
-import BackButton from '../components/BackButton'
+import MyBackButton from '../components/MyBackButton'
 import { hp, wp } from '../helper/common'
-import Input from '../components/Input'
+import MyInput from '../components/MyInput'
 import MyButton from '../components/MyButton'
 import { useNavigation } from '@react-navigation/native'
 import { supabase } from '../lib/supabase'
@@ -48,7 +48,7 @@ const LoginScr = () => {
     <ScreenWrapper bg='white'>
       <StatusBar style="dark" />
       <View style={styles.container}>
-        <BackButton />
+        <MyBackButton />
         {/* welcomm */}
         <View>
           <Text style={styles.welcomText} >Hey,</Text>
@@ -60,12 +60,12 @@ const LoginScr = () => {
             Please login to continous!
           </Text>
 
-          <Input
+          <MyInput
             icon={<Icon.Mail stroke={theme.colors.dark} strokeWidth={2} width={26} height={26} />}
             placeholder='Nhập email của bạn...'
             onChangeText={value => emailRef.current = value}
           />
-          <Input
+          <MyInput
             icon={<Icon.Lock stroke={theme.colors.dark} strokeWidth={2} width={26} height={26} />}
             placeholder='Nhập mật khẩu của bạn...'
             secureTextEntry

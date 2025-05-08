@@ -5,7 +5,7 @@ import { Image } from 'expo-image'
 import { theme } from '../constants/theme'
 import { getUserImageSrc } from '../services/imageService'
 
-const Avatar = ({
+const MyAvatar = ({
     uri,
     size= hp(3),
     rounded = 10,
@@ -23,7 +23,7 @@ const Avatar = ({
   )
 }
 
-export default Avatar
+export default MyAvatar
 
 const styles = StyleSheet.create({
     avatar:{

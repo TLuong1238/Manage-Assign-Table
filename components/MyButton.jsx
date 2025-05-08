@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import React from 'react'
 import { theme } from '../constants/theme'
 import { hp } from '../helper/common'
-import Loading from './Loading'
+import Loading from './MyLoading'
 
 const MyButton = (
     {buttonStyle,

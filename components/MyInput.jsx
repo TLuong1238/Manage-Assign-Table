@@ -2,7 +2,7 @@ import { StyleSheet, Text, TextInput, View } from 'react-native'
 import { theme } from '../constants/theme'
 import { hp } from '../helper/common'
 
-const Input = (props) => {
+const MyInput = (props) => {
 
   return (
     <View style={[styles.container, props.containerStyle && props.containerStyle]}>
@@ -22,7 +22,7 @@ const Input = (props) => {
   )
 }
 
-export default Input
+export default MyInput
 
 const styles = StyleSheet.create({
   container:{

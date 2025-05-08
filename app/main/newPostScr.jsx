@@ -1,12 +1,12 @@
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Image, Pressable, Alert } from 'react-native'
 import React, { useRef, useState } from 'react'
 import ScreenWrapper from '../../components/ScreenWrapper'
-import Header from '../../components/Header'
+import Header from '../../components/MyHeader'
 import { hp, wp } from '../../helper/common'
 import { theme } from '../../constants/theme'
 import { useAuth } from '../../context/AuthContext'
-import Avatar from '../../components/Avatar'
-import RichTextEditor from '../../components/RichTextEditor'
+import Avatar from '../../components/MyAvatar'
+import MyRichTextEditor from '../../components/MyRichTextEditor'
 import { useRouter } from 'expo-router'
 import * as Icon from "react-native-feather"
 import MyButton from '../../components/MyButton'
@@ -23,9 +23,9 @@ const NewPostScr = () => {
   const editorRef = useRef(null);
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [file, setFile] = useState(file);
+  const [file, setFile] = useState(null);
 
-  console.log('user: ', user?.data);
+  // console.log('user: ', user?.data);
 
 
   const onPick = async (isImage) => {
@@ -57,6 +57,12 @@ const NewPostScr = () => {
     }
     return false
   }
+  const isBodyEmpty = (body) => {
+    if (!body) return true;
+    // Loại bỏ thẻ HTML, &nbsp;, ký tự xuống dòng, khoảng trắng
+    const text = body.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, '').replace(/\s/g, '');
+    return text.length === 0;
+  };
 
   const getFileType = file => {
     if (!file) return null;
@@ -76,25 +82,39 @@ const NewPostScr = () => {
 
     return getSupabaseFileUrl(file)?.uri;
   }
+  //
   const onSubmit = async () => {
-    if(!bodyRef.current || !file){
+    console.log('bodyRef.current:', bodyRef.current);
+    console.log('file:', file);
+    if(isBodyEmpty(bodyRef.current) && !file){
       Alert.alert("Thông báo!", "Hãy nêu suy nghĩ cả bạn hoặc thêm ảnh và video!");
       return;
     }
-
     let data = {
       file,
       body: bodyRef.current,
       userId: user?.id,
     }
-    console.log('userId:', data.userId )
+    
+    // console.log('userId:', data.userId )
+    
     //create Post
+
     
     setLoading(true);
     let res = await createOrUpdatePost(data);
     setLoading(false);
     //
-    console.log('post res: ',res);
+    if(res.success){
+      setFile(null);
+      bodyRef.current = '';
+      editorRef.current?.setContentHTML('');
+      Alert.alert('Post: ', 'Đăng bài thành công!');
+      router.back();
+    } else {
+      Alert.alert('Post: ', res.msg);
+    }
+    // console.log('post res: ',res);
 
     // console.log('body: ',bodyRef.current);
     // console.log('file: ',file);
@@ -126,7 +146,7 @@ const NewPostScr = () => {
           </View>
           {/* editor */}
           <View style={styles.textEditor}>
-            <RichTextEditor editorRef={editorRef} onChange={body => bodyRef.current = body} />
+            <MyRichTextEditor editorRef={editorRef} onChange={body => bodyRef.current = body} />
           </View>
           {
             file && (

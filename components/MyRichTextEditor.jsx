@@ -3,7 +3,7 @@ import React from 'react'
 import { RichEditor, RichToolbar, actions } from 'react-native-pell-rich-editor'
 import { theme } from '../constants/theme'
 
-const RichTextEditor = ({
+const MyRichTextEditor = ({
     editorRef,
     onChange
 }) => {
@@ -55,7 +55,7 @@ const RichTextEditor = ({
     )
 }
 
-export default RichTextEditor
+export default MyRichTextEditor
 
 const styles = StyleSheet.create({
     richBar: {

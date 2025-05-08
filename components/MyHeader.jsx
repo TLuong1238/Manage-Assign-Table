@@ -1,11 +1,11 @@
 import { StyleSheet, Text, View } from 'react-native'
 import React from 'react'
 import { useRouter } from 'expo-router'
-import BackButton from './BackButton';
+import BackButton from './MyBackButton';
 import { hp } from '../helper/common';
 import { theme } from '../constants/theme';
 
-const Header = ({title, showBackButton = true}) => {
+const MyHeader = ({title, showBackButton = true}) => {
     const router = useRouter();
   return (
     <View style = {styles.container}>
@@ -21,7 +21,7 @@ const Header = ({title, showBackButton = true}) => {
   )
 }
 
-export default Header
+export default MyHeader
 
 const styles = StyleSheet.create({
     container:{

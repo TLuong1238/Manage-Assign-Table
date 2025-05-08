@@ -4,7 +4,7 @@ import * as Icon from 'react-native-feather'
 import { theme } from '../constants/theme'
 import { useNavigation } from '@react-navigation/native'
 
-const BackButton = ({size = 26}) => {
+const MyBackButton = ({size = 26}) => {
     const navigation = useNavigation();
   return (
     <Pressable onPress={() => navigation.goBack()} style ={styles.button}>
@@ -13,7 +13,7 @@ const BackButton = ({size = 26}) => {
   )
 }
 
-export default BackButton
+export default MyBackButton
 
 const styles = StyleSheet.create({
     button:{

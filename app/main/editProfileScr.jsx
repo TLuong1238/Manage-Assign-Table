@@ -1,17 +1,17 @@
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import React, { useEffect, useState } from 'react'
 import ScreenWrapper from '../../components/ScreenWrapper'
-import Header from '../../components/Header'
 import { hp, wp } from '../../helper/common'
 import { theme } from '../../constants/theme'
 import { useAuth } from '../../context/AuthContext'
 import { getUserImageSrc, uploadFile } from '../../services/imageService'
 import * as Icon from 'react-native-feather'
-import Input from '../../components/Input'
+import MyInput from '../../components/MyInput'
 import MyButton from '../../components/MyButton'
 import { updateUserData } from '../../services/userService'
 import { useRouter } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker';
+import MyHeader from '../../components/MyHeader';
 
 
 
@@ -125,7 +125,7 @@ const EditProfileScr = () => {
         <ScreenWrapper bg={'white'}>
             <View style={styles.container}>
                 <ScrollView style={{ flex: 1 }}>
-                    <Header title="Edit Profiles" />
+                    <MyHeader title="Edit Profiles" />
 
                     {/* form */}
                     <View style={styles.form}>
@@ -138,25 +138,25 @@ const EditProfileScr = () => {
                         <Text style={{ fontSize: hp(3), color: theme.colors.text }}>
                             Vui lòng điền thông tin của bạn!
                         </Text>
-                        <Input
+                        <MyInput
                             icon={<Icon.User stroke={theme.colors.dark} />}
                             placeholder={"Nhập tên của bạn!"}
                             value={user.name}
                             onChangeText={value => setUser({ ...user, name: value })}
                         />
-                        <Input
+                        <MyInput
                             icon={<Icon.PhoneCall stroke={theme.colors.dark} />}
                             placeholder={"Nhập số điện thoại của bạn!"}
                             value={user.phone}
                             onChangeText={value => setUser({ ...user, phone: value })}
                         />
-                        <Input
+                        <MyInput
                             icon={<Icon.Home stroke={theme.colors.dark} />}
                             placeholder={"Nhập địa chỉ của bạn!"}
                             value={user.address}
                             onChangeText={value => setUser({ ...user, address: value })}
                         />
-                        <Input
+                        <MyInput
                             placeholder={"Mô tả một chút về bạn!"}
                             multiline={true}
                             containerStyle={styles.bio}

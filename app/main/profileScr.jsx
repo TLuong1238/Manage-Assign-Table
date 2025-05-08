@@ -3,11 +3,11 @@ import React from 'react'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { useAuth } from '../../context/AuthContext'
 import { useRouter } from 'expo-router'
-import Header from '../../components/Header'
+import Header from '../../components/MyHeader'
 import { hp, wp } from '../../helper/common'
 import * as Icon from 'react-native-feather';
 import { supabase } from '../../lib/supabase'
-import Avatar from '../../components/Avatar'
+import Avatar from '../../components/MyAvatar'
 import { theme } from '../../constants/theme'
 
 const ProfileScr = () => {
