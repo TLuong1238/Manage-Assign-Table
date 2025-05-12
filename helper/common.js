@@ -10,4 +10,6 @@ export const wp = percentage => {
     return (percentage * deviceWidth) /100;
 }
 
-
+export const scriptHtmlTags = (html) => {
+    return html.replace(/<[^>]*>?/gm,'');
+}

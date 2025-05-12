@@ -17,17 +17,25 @@ import { getUserData } from '../../services/userService'
 const HomeScr = () => {
   const { user, setAuth } = useAuth();
   const router = useRouter();
-  const [limit, setLimit] = useState(10);
-
+  const [limit, setLimit] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
   const [posts, setPosts] = useState([]);
 
   const getPosts = async () => {
-    const newLimit = limit + 10;
-    setLimit(newLimit);
-    let res = await fetchPosts(limit);
+    console.log('đã gọi')
+    if (!hasMore) return null;
+    const newLimit = limit + 4;
+    console.log('fetching post: ', newLimit);
+    let res = await fetchPosts(newLimit);
     if (res.success) {
-      // console.log('fetch data:', res.data);
+      if (posts.length == res.data.length) {
+        console.log('da set false')
+        setHasMore(false); // Không còn dữ liệu để load thêm
+      }
+      setLimit(newLimit);
       setPosts(res.data);
+      console.log('da post')
+
     }
   }
 
@@ -48,11 +56,11 @@ const HomeScr = () => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, handlePostEvent)
       .subscribe();
 
-
+    
     getPosts();
+    console.log("đã đến đây")
 
-
-    return () =>{
+    return () => {
       supabase.removeChannel(postChannel);
     }
   }, [])
@@ -94,6 +102,7 @@ const HomeScr = () => {
           </View>
         </View>
         {/* post */}
+        
         <FlatList
           data={posts}
           showsVerticalScrollIndicator={false}
@@ -105,10 +114,22 @@ const HomeScr = () => {
             router={router}
           />
           }
-          ListFooterComponent={
+          onEndReached={() => {
+            if (hasMore) getPosts();
+          }}
+          onEndReachedThreshold={0.2}
+          ListFooterComponent={hasMore ?(
             <View style={{ marginVertical: posts.length == 0 ? 200 : 30 }}>
               <MyLoading />
             </View>
+          ) : (
+            <View style = {{marginVertical: 20}}>
+              <Text style = {styles.noPosts}>
+                Bạn đã xem hết nội dung...
+              </Text>
+            </View>
+          )
+
           }
 
         />
@@ -147,12 +168,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: wp(4)
   },
   noPosts: {
-    fontSize: hp(12),
+    fontSize: hp(2.5),
     textAlign: 'center',
     color: theme.colors.text
   },
   pill: {
 
-  }
+  },
 
 })
