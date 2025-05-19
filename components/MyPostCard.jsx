@@ -33,7 +33,11 @@ const MyPostCard = ({
     item,
     currentUser,
     router,
-    hasShadow = true
+    hasShadow = true,
+    showMoreIcon = true,
+    showDeleteIcon = false,
+    onDelete = () => { },
+    onEdit = () => { },
 }) => {
     // console.log('currentUser in MyPostCard:', currentUser);
     const shadowStyles = {
@@ -59,8 +63,13 @@ const MyPostCard = ({
     }, [])
 
     const openPostDetails = () => {
-        //
-    }
+        if (!showMoreIcon) return null;
+        router.push({
+            pathname: 'main/postDetailsScr',
+            params: { postId: item?.id }
+        });
+    };
+    // likes, share
     const onLike = async () => {
         if (liked) {
             let UpdateLikes = likes.filter(likes => likes.userId != currentUser?.id);
@@ -103,107 +112,125 @@ const MyPostCard = ({
     //     Share.share(context);
     // } 
     const onShare = async () => {
-    const hasBody = !!item?.body;
-    const isImage = item?.file && item.file.includes('postImages');
-    const isVideo = item?.file && item.file.includes('postVideos');
+        const hasBody = !!item?.body;
+        const isImage = item?.file && item.file.includes('postImages');
+        const isVideo = item?.file && item.file.includes('postVideos');
 
-    if (hasBody && !isImage && !isVideo) {
-        // Chỉ có text
-        try {
-            await Share.share({
-                message: scriptHtmlTags(item?.body) || 'Xem bài viết này!',
-            });
-        } catch (error) {
-            Alert.alert('Không thể chia sẻ nội dung');
+        if (hasBody && !isImage && !isVideo) {
+            //text only
+            try {
+                await Share.share({
+                    message: scriptHtmlTags(item?.body) || 'Xem bài viết này!',
+                });
+            } catch (error) {
+                Alert.alert('Không thể chia sẻ nội dung');
+            }
+            return;
         }
-        return;
-    }
 
-    if (!hasBody && isImage) {
-        // Chỉ có ảnh
-        setLoading(true);
-        let url = await downloadFile(getSupabaseFileUrl(item?.file).uri);
-        setLoading(false);
-        if (await Sharing.isAvailableAsync()) {
-            await Sharing.shareAsync(url, {
-                mimeType: 'image/jpeg',
-                dialogTitle: 'Chia sẻ ảnh',
-            });
-        } else {
-            Alert.alert('Không hỗ trợ chia sẻ trên thiết bị này');
+        if (!hasBody && isImage) {
+            // pic only
+            setLoading(true);
+            let url = await downloadFile(getSupabaseFileUrl(item?.file).uri);
+            setLoading(false);
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(url, {
+                    mimeType: 'image/jpeg',
+                    dialogTitle: 'Chia sẻ ảnh',
+                });
+            } else {
+                Alert.alert('Không hỗ trợ chia sẻ trên thiết bị này');
+            }
+            return;
         }
-        return;
-    }
 
-    if (!hasBody && isVideo) {
-        // Chỉ có video
-        setLoading(true);
-        let url = await downloadFile(getSupabaseFileUrl(item?.file).uri);
-        setLoading(false);
-        if (await Sharing.isAvailableAsync()) {
-            await Sharing.shareAsync(url, {
-                mimeType: 'video/mp4',
-                dialogTitle: 'Chia sẻ video',
-            });
-        } else {
-            Alert.alert('Không hỗ trợ chia sẻ trên thiết bị này');
+        if (!hasBody && isVideo) {
+            //video only
+            setLoading(true);
+            let url = await downloadFile(getSupabaseFileUrl(item?.file).uri);
+            setLoading(false);
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(url, {
+                    mimeType: 'video/mp4',
+                    dialogTitle: 'Chia sẻ video',
+                });
+            } else {
+                Alert.alert('Không hỗ trợ chia sẻ trên thiết bị này');
+            }
+            return;
         }
-        return;
-    }
 
-    // Có cả nội dung và media
-    Alert.alert(
-        "Chia sẻ bài viết",
-        "Bạn muốn chia sẻ gì?",
-        [
-            hasBody ? {
-                text: "Nội dung bài viết",
-                onPress: async () => {
-                    try {
-                        await Share.share({
-                            message: scriptHtmlTags(item?.body) || 'Xem bài viết này!',
-                        });
-                    } catch (error) {
-                        Alert.alert('Không thể chia sẻ nội dung');
+        // both
+        Alert.alert(
+            "Chia sẻ bài viết",
+            "Bạn muốn chia sẻ gì?",
+            [
+                hasBody ? {
+                    text: "Nội dung bài viết",
+                    onPress: async () => {
+                        try {
+                            await Share.share({
+                                message: scriptHtmlTags(item?.body) || 'Xem bài viết này!',
+                            });
+                        } catch (error) {
+                            Alert.alert('Không thể chia sẻ nội dung');
+                        }
                     }
-                }
-            } : null,
-            isImage ? {
-                text: "Chia sẻ ảnh",
-                onPress: async () => {
-                    setLoading(true);
-                    let url = await downloadFile(getSupabaseFileUrl(item?.file).uri);
-                    setLoading(false);
-                    if (await Sharing.isAvailableAsync()) {
-                        await Sharing.shareAsync(url, {
-                            mimeType: 'image/jpeg',
-                            dialogTitle: 'Chia sẻ ảnh',
-                        });
-                    } else {
-                        Alert.alert('Không hỗ trợ chia sẻ trên thiết bị này');
+                } : null,
+                isImage ? {
+                    text: "Chia sẻ ảnh",
+                    onPress: async () => {
+                        setLoading(true);
+                        let url = await downloadFile(getSupabaseFileUrl(item?.file).uri);
+                        setLoading(false);
+                        if (await Sharing.isAvailableAsync()) {
+                            await Sharing.shareAsync(url, {
+                                mimeType: 'image/jpeg',
+                                dialogTitle: 'Chia sẻ ảnh',
+                            });
+                        } else {
+                            Alert.alert('Không hỗ trợ chia sẻ trên thiết bị này');
+                        }
                     }
-                }
-            } : null,
-            isVideo ? {
-                text: "Chia sẻ video",
-                onPress: async () => {
-                    setLoading(true);
-                    let url = await downloadFile(getSupabaseFileUrl(item?.file).uri);
-                    setLoading(false);
-                    if (await Sharing.isAvailableAsync()) {
-                        await Sharing.shareAsync(url, {
-                            mimeType: 'video/mp4',
-                            dialogTitle: 'Chia sẻ video',
-                        });
-                    } else {
-                        Alert.alert('Không hỗ trợ chia sẻ trên thiết bị này');
+                } : null,
+                isVideo ? {
+                    text: "Chia sẻ video",
+                    onPress: async () => {
+                        setLoading(true);
+                        let url = await downloadFile(getSupabaseFileUrl(item?.file).uri);
+                        setLoading(false);
+                        if (await Sharing.isAvailableAsync()) {
+                            await Sharing.shareAsync(url, {
+                                mimeType: 'video/mp4',
+                                dialogTitle: 'Chia sẻ video',
+                            });
+                        } else {
+                            Alert.alert('Không hỗ trợ chia sẻ trên thiết bị này');
+                        }
                     }
-                }
-            } : null,
-            { text: "Hủy", style: "cancel" }
-        ].filter(Boolean)
-    );
-};
+                } : null,
+                { text: "Hủy", style: "cancel" }
+            ].filter(Boolean)
+        );
+    };
+
+    // delete post
+    handlePostDelete = () => {
+        Alert.alert("Xác nhận", "Bạn có chắc chắn muốn xóa bài viết này không?", [
+            {
+                text: "Hủy bỏ",
+                onPress: () => console.log("Hủy"),
+                style: 'cancel'
+            },
+            {
+                text: "Đồng ý",
+                onPress: () => onDelete(item),
+                style: 'destructive'
+            }
+        ])
+
+
+    }
 
     const liked = likes.filter(likes => likes.userId == currentUser?.id)[0] ? true : false;
 
@@ -222,10 +249,29 @@ const MyPostCard = ({
                         <Text style={styles.postTime}>{createAt}</Text>
                     </View>
                 </View>
-                <TouchableOpacity onPress={openPostDetails}>
-                    <Icon.MoreHorizontal
-                        stroke={theme.colors.dark} height={hp(3)} width={hp(3)} />
-                </TouchableOpacity>
+                {/* post Details */}
+                {
+                    showMoreIcon && (
+                        <TouchableOpacity onPress={openPostDetails}>
+                            <Icon.MoreHorizontal
+                                stroke={theme.colors.dark} height={hp(3)} width={hp(3)} />
+                        </TouchableOpacity>
+                    )
+                }
+                {
+                    showDeleteIcon && currentUser?.id == item?.userId && (
+                        <View style={styles.actions}>
+                            <TouchableOpacity onPress={() => onEdit(item)}>
+                                <Icon.Edit
+                                    stroke={theme.colors.dark} height={hp(3)} width={hp(3)} />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={handlePostDelete}>
+                                <Icon.Trash2
+                                    stroke={'red'} height={hp(3)} width={hp(3)} />
+                            </TouchableOpacity>
+                        </View>
+                    )
+                }
             </View>
             {/* post body */}
             <View stye={styles.content}>
@@ -281,11 +327,13 @@ const MyPostCard = ({
                     </Text>
                 </View>
                 <View style={styles.footerButton}>
-                    <TouchableOpacity>
+                    <TouchableOpacity onPress={openPostDetails}>
                         <Icon.MessageSquare stroke={theme.colors.rose} height={30} width={30} />
                     </TouchableOpacity>
                     <Text style={styles.count}>
-                        0
+                        {
+                            item?.comments && item.comments[0]?.count || 0
+                        }
                     </Text>
                 </View>
                 <View style={styles.footerButton}>
@@ -358,6 +406,15 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4
+    },
+    actions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 15,
+    },
+    count: {
+        color: theme.colors.text,
+        fontSize: hp(1.5),
     }
 
 })

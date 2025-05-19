@@ -1,5 +1,5 @@
-import { Alert, Pressable, StyleSheet, Text, Touchable, TouchableOpacity, View } from 'react-native'
-import React from 'react'
+import { Alert, FlatList, Pressable, StyleSheet, Text, Touchable, TouchableOpacity, View } from 'react-native'
+import React, { useState } from 'react'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { useAuth } from '../../context/AuthContext'
 import { useRouter } from 'expo-router'
@@ -9,10 +9,18 @@ import * as Icon from 'react-native-feather';
 import { supabase } from '../../lib/supabase'
 import Avatar from '../../components/MyAvatar'
 import { theme } from '../../constants/theme'
+import { fetchPosts } from '../../services/postServices'
+import MyLoading from '../../components/MyLoading'
+import MyPostCard from '../../components/MyPostCard'
 
 const ProfileScr = () => {
   const { user, setAuth } = useAuth();
   const router = useRouter();
+  //
+  const [limit, setLimit] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [posts, setPosts] = useState([]);
+
 
   // console.log('userData:', user);
   const onLogout = async () => {
@@ -38,10 +46,61 @@ const ProfileScr = () => {
       }
     ])
   }
+  // Get user post
+  const getPosts = async () => {
+    console.log('đã gọi')
+    if (!hasMore) return null;
+    const newLimit = limit + 10;
+    console.log('fetching post: ', newLimit);
+    let res = await fetchPosts(newLimit, user.id);
+    if (res.success) {
+      if (posts.length == res.data.length) {
+        console.log('da set false')
+        setHasMore(false); // Không còn dữ liệu để load thêm
+      }
+      setLimit(newLimit);
+      setPosts(res.data);
+      console.log('da post')
+
+    }
+  }
 
   return (
-    <ScreenWrapper>
-      <UserHeader user={user} router={router} handleLogout={handleLogout} />
+    <ScreenWrapper bg = {'white'}>
+      {/* user post */}
+      <FlatList
+        ListHeaderComponent={<UserHeader user={user} router={router} handleLogout={handleLogout} />}
+        ListHeaderComponentStyle={{ marginBottom: 20 }}
+        //
+        data={posts}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listStyle}
+        keyExtractor={item => item.id.toString()}
+        renderItem={({ item }) => <MyPostCard
+          item={item}
+          currentUser={user}
+          router={router}
+        />
+        }
+        onEndReached={() => {
+          if (hasMore) getPosts();
+        }}
+        onEndReachedThreshold={0.2}
+        ListFooterComponent={hasMore ? (
+          <View style={{ marginVertical: posts.length == 0 ? 100 : 30 }}>
+            <MyLoading />
+          </View>
+        ) : (
+          <View style={{ marginVertical: 20 }}>
+            <Text style={styles.noPosts}>
+              Bạn đã xem hết nội dung...
+            </Text>
+          </View>
+        )
+
+        }
+
+      />
     </ScreenWrapper>
   )
 }
@@ -50,7 +109,7 @@ const UserHeader = ({ user, router, handleLogout }) => {
   return (
     <View style={{ flex: 1, backgroundColor: 'white', paddingHorizontal: wp(2) }}>
       <View>
-        <Header title="Profile "/>
+        <Header title="Profile " />
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Icon.Power strokeWidth={2} width={wp(5)} height={wp(5)} color={'red'} />
         </TouchableOpacity>
@@ -153,6 +212,15 @@ const styles = StyleSheet.create({
     fontSize: hp(2.5),
     color: theme.colors.textLight,
     fontWeight: '500',
+  },
+  listStyle: {
+    paddingTop: 20,
+    paddingHorizontal: wp(4)
+  },
+  noPosts: {
+    fontSize: hp(2.5),
+    textAlign: 'center',
+    color: theme.colors.text
   },
 
 })

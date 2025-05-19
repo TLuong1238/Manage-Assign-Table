@@ -29,7 +29,7 @@ const styles = StyleSheet.create({
     avatar:{
         borderCurve: 'continuous',
         borderColor: theme.colors.textLight,
-        borderWidth: 2,
+        borderWidth: 1
         
     }
 })

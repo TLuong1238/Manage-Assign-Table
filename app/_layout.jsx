@@ -20,7 +20,7 @@ const _layout = () => {
 }
 
 const MainLayout = () => {
-  const { user,setAuth, setUserData } = useAuth();
+  const { user, setAuth, setUserData } = useAuth();
   const navigation = useNavigation();
   const router = useRouter();
 
@@ -49,9 +49,9 @@ const MainLayout = () => {
   const updateUserData = async (user, email) => {
     let res = await getUserData(user?.id);
     if (res.success) {
-      setUserData({...res.data,email});
+      setUserData({ ...res.data, email });
     }
-    
+
   }
 
   // return <Navigation />
@@ -60,9 +60,22 @@ const MainLayout = () => {
       screenOptions={{
         headerShown: false,
         animation: 'fade',
-      }
-      }
-    />
+      }}
+    >
+      <Stack.Screen
+        name="main/homeScr"
+      />
+      <Stack.Screen
+        name="main/postDetailsScr"
+        options={{
+          presentation: 'modal'
+        }}
+      />
+      <Stack.Screen
+        name="welcomeScr"
+      />
+      {/* Thêm các màn hình khác nếu có */}
+    </Stack>
   )
 }
 

@@ -13,10 +13,12 @@ import { fetchPosts } from '../../services/postServices'
 import PostCard from '../../components/MyPostCard'
 import MyLoading from '../../components/MyLoading'
 import { getUserData } from '../../services/userService'
+import MyPostCard from '../../components/MyPostCard'
 
 const HomeScr = () => {
   const { user, setAuth } = useAuth();
   const router = useRouter();
+
   const [limit, setLimit] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [posts, setPosts] = useState([]);
@@ -24,7 +26,7 @@ const HomeScr = () => {
   const getPosts = async () => {
     console.log('đã gọi')
     if (!hasMore) return null;
-    const newLimit = limit + 4;
+    const newLimit = limit + 10;
     console.log('fetching post: ', newLimit);
     let res = await fetchPosts(newLimit);
     if (res.success) {
@@ -40,20 +42,50 @@ const HomeScr = () => {
   }
 
   const handlePostEvent = async (payload) => {
+    console.log('Received post event:', payload.eventType, payload);
     if (payload.eventType == 'INSERT' && payload?.new?.id) {
-      console.log('Realtime payload:', payload);
       let newPost = { ...payload.new };
       let res = await getUserData(newPost.userId);
+      newPost.postLikes = [];
+      newPost.comments = [{count: 0}]
       newPost.user = res.success ? res.data : {};
       console.log('newPost:', newPost);
       setPosts(prevPosts => [newPost, ...prevPosts]);
     }
+
+    if( payload.eventType == 'DELETE' && payload?.old?.id) {
+      setPosts(prevPosts => {
+        let updatedPosts = prevPosts.filter(post => post.id != payload.old.id);
+        return updatedPosts; 
+      })
+    }
+
+
+    if( payload.eventType == 'UPDATE' && payload?.new?.id) {
+      console.log('update post:', payload);
+      setPosts(prevPosts => {
+        let updatedPosts = prevPosts.map(post => {
+          if(post.id == payload.new.id) {
+            post.body = payload.new.body;
+            post.file = payload.new.file;
+            post.created_at = payload.new.created_at;
+          }
+          return post;
+        });
+
+        return updatedPosts; 
+      })
+    }
   };
 
   useEffect(() => {
-    let postChannel = supabase
+    let postsChannel = supabase
       .channel('posts')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, handlePostEvent)
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'posts' }, 
+        handlePostEvent)
       .subscribe();
 
     
@@ -61,7 +93,7 @@ const HomeScr = () => {
     console.log("đã đến đây")
 
     return () => {
-      supabase.removeChannel(postChannel);
+      supabase.removeChannel(postsChannel);
     }
   }, [])
 
@@ -108,7 +140,7 @@ const HomeScr = () => {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listStyle}
           keyExtractor={item => item.id.toString()}
-          renderItem={({ item }) => <PostCard
+          renderItem={({ item }) => <MyPostCard
             item={item}
             currentUser={user}
             router={router}

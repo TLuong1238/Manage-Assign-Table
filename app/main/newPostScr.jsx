@@ -1,5 +1,5 @@
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Image, Pressable, Alert } from 'react-native'
-import React, { useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import Header from '../../components/MyHeader'
 import { hp, wp } from '../../helper/common'
@@ -7,13 +7,14 @@ import { theme } from '../../constants/theme'
 import { useAuth } from '../../context/AuthContext'
 import Avatar from '../../components/MyAvatar'
 import MyRichTextEditor from '../../components/MyRichTextEditor'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as Icon from "react-native-feather"
 import MyButton from '../../components/MyButton'
 import * as ImagePicker from 'expo-image-picker';
 import { getSupabaseFileUrl } from '../../services/imageService'
 import { Video } from 'expo-av';
 import { createOrUpdatePost } from '../../services/postServices'
+import { isForInStatement } from 'typescript'
 
 
 const NewPostScr = () => {
@@ -27,6 +28,18 @@ const NewPostScr = () => {
 
   // console.log('user: ', user?.data);
 
+  const post = useLocalSearchParams();
+  useEffect(() => {
+    if (post && post.id) {
+      bodyRef.current = post.body;
+      setFile(post.file);
+      setTimeout(() => {
+        editorRef?.current?.setContentHTML(post.body);
+      }, 300)
+
+      return () => clearTimeout();
+    }
+  }, [post?.id, post?.body, post?.file])
 
   const onPick = async (isImage) => {
     try {
@@ -84,10 +97,13 @@ const NewPostScr = () => {
   }
   //
   const onSubmit = async () => {
-    console.log('bodyRef.current:', bodyRef.current);
-    console.log('file:', file);
-    if(isBodyEmpty(bodyRef.current) && !file){
-      Alert.alert("Thông báo!", "Hãy nêu suy nghĩ cả bạn hoặc thêm ảnh và video!");
+    // console.log('bodyRef.current:', bodyRef.current);
+    // console.log('file:', file);
+
+    console.log("Post data:", post, typeof post);
+    console.log("Post ID:", post?.id, typeof post?.id);
+    if (isBodyEmpty(bodyRef.current) && !file) {
+      Alert.alert("Thông báo!", "Hãy nêu suy nghĩ của bạn hoặc thêm ảnh và video!");
       return;
     }
     let data = {
@@ -95,21 +111,22 @@ const NewPostScr = () => {
       body: bodyRef.current,
       userId: user?.id,
     }
-    
-    // console.log('userId:', data.userId )
-    
-    //create Post
 
-    
+    if (post && post.id) data.id = post.id;
+
     setLoading(true);
     let res = await createOrUpdatePost(data);
     setLoading(false);
     //
-    if(res.success){
+    if (res.success) {
       setFile(null);
       bodyRef.current = '';
       editorRef.current?.setContentHTML('');
-      Alert.alert('Post: ', 'Đăng bài thành công!');
+      if (post && post.id) {
+        Alert.alert('Post: ', 'Cập nhật bài viết thành công!');
+      } else {
+        Alert.alert('Post: ', 'Đăng bài thành công!');
+      }
       router.back();
     } else {
       Alert.alert('Post: ', res.msg);
@@ -154,15 +171,15 @@ const NewPostScr = () => {
                 {
                   getFileType(file) == 'video' ? (
                     <Video
-                      style ={{flex : 1}}
-                      source={{uri: getFIleUri(file)}}
+                      style={{ flex: 1 }}
+                      source={{ uri: getFIleUri(file) }}
                       useNativeControls
                       isLooping
                       resizeMode='cover'
                     />
                   ) : (
-                    <Image source={{ uri: getFIleUri(file) }} resizeMode='cover' 
-                    style={{ flex: 1, width: '100%', height: '100%' }} />
+                    <Image source={{ uri: getFIleUri(file) }} resizeMode='cover'
+                      style={{ flex: 1, width: '100%', height: '100%' }} />
                   )
                 }
                 <Pressable style={styles.deleteIcon} onPress={() => setFile(null)}>
@@ -184,7 +201,7 @@ const NewPostScr = () => {
           </View>
         </ScrollView>
         <MyButton
-          title='Đăng bài'
+          title={post && post?.id ? "Cập nhật" : "Đăng bài"}
           buttonStyle={{ height: hp(6) }}
           loading={loading}
           hasShadow={false}
