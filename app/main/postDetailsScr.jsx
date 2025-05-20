@@ -12,12 +12,13 @@ import * as Icon from 'react-native-feather'
 import MyCommentItem from '../../components/MyCommentItem';
 import { supabase } from '../../lib/supabase';
 import { getUserData } from '../../services/userService';
+import { createNotification } from '../../services/notificationServices';
 
 
 
 
 const PostDetailsScr = () => {
-    const { postId } = useLocalSearchParams();
+    const { postId, commentId } = useLocalSearchParams();
     const { user } = useAuth();
     const router = useRouter();
     const [startLoading, setStartLoading] = useState(true);
@@ -26,14 +27,14 @@ const PostDetailsScr = () => {
     const inputRef = useRef(null);
     const commentRef = useRef('');
     const [loading, setLoading] = useState(false);
-
+    const scrollViewRef = useRef(null);
 
 
     // handle new comment
 
     const handleNewComment = async (paylod) => {
-        console.log ('new comment payload:', paylod);
-        if(paylod?.new) {
+        console.log('new comment payload:', paylod);
+        if (paylod?.new) {
             let newComment = { ...paylod.new };
             let res = await getUserData(newComment.userId);
             newComment.user = res.success ? res.data : {};
@@ -49,24 +50,36 @@ const PostDetailsScr = () => {
     useEffect(() => {
 
         let commentChannel = supabase
-          .channel('comments')
-          .on('postgres_changes', {
-            event: 'INSERT', 
-            schema: 'public', 
-            table: 'comments',
-            filter: `postId=eq.${postId}` 
-        }, 
-            
-            handleNewComment)
-          .subscribe();
-    
-        
+            .channel('comments')
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'comments',
+                filter: `postId=eq.${postId}`
+            },
+
+                handleNewComment)
+            .subscribe();
+
+
         getPostDetails();
-    
-        return () => {
-          supabase.removeChannel(commentChannel);
+        if (commentId && post?.comments) {
+            // Đợi một chút để UI render xong
+            setTimeout(() => {
+                if (commentRef.current[commentId]) {
+                    commentRef.current[commentId].measure((x, y, width, height, pageX, pageY) => {
+                        scrollViewRef.current?.scrollTo({
+                            y: pageY - 100,
+                            animated: true
+                        });
+                    });
+                }
+            }, 500);
         }
-      }, [])
+        return () => {
+            supabase.removeChannel(commentChannel);
+        }
+    }, [])
 
     const getPostDetails = async () => {
         //fetch postDetails
@@ -83,7 +96,7 @@ const PostDetailsScr = () => {
     const onDeleteComment = async (comment) => {
         console.log('delete comment:', comment);
         let res = await removePostComment(comment?.id);
-        if(res.success) {
+        if (res.success) {
             setPosts(prev => {
                 let updatePost = { ...prev };
                 updatePost.comments = updatePost.comments.filter(c => c.id != comment?.id);
@@ -124,6 +137,19 @@ const PostDetailsScr = () => {
         setLoading(false);
         if (res.success) {
             //send notification
+            if (user.id != post?.userId) {
+                let notifi = {
+                    senderId: user.id,
+                    receiverId: post?.userId,
+                    title: `${user?.name} đã bình luận về bài viết của bạn`,
+                    data: JSON.stringify({
+                        postId: post?.id,
+                        commentId: res.data.id,
+                    })
+                }
+                createNotification(notifi);
+            }
+            //
             inputRef?.current?.clear();
             commentRef.current = "";
         } else {
@@ -146,7 +172,7 @@ const PostDetailsScr = () => {
     const onDeletePost = async (item) => {
         console.log('delete post');
         let res = await removePost(post?.id);
-        if(res.success){
+        if (res.success) {
             router.back();
         } else {
             console.log('delete post error:', res.msg);
@@ -164,14 +190,16 @@ const PostDetailsScr = () => {
                 contentContainerStyle={styles.list}>
                 {post ? (
                     <MyPostCard
-                        item={{ ...post, comments: [{ count: post?.comments?.length }] }}
+                        item={{ ...post, 
+                            comments: [{ count: post?.comments?.length }],
+                        }}
                         currentUser={user}
                         router={router}
                         hasShadow={false}
                         showMoreIcon={false}
                         showDeleteIcon={true}
-                        onDelete = {onDeletePost}
-                        onEdit = {onEditPost}
+                        onDelete={onDeletePost}
+                        onEdit={onEditPost}
                     />
                 ) : (
                     <MyLoading />
@@ -209,6 +237,7 @@ const PostDetailsScr = () => {
                                 key={comment?.id?.toString()}
                                 canDelete={user?.id == comment?.userId || user?.id == post?.userId}
                                 onDelete={onDeleteComment}
+                                highlight={comment.id == commentId}
                             />
                         )
                     }

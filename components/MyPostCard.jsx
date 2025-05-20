@@ -1,5 +1,5 @@
 import { Alert, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { theme } from '../constants/theme'
 import MyAvatar from './MyAvatar'
 import { hp, scriptHtmlTags, wp } from '../helper/common'
@@ -33,6 +33,7 @@ const MyPostCard = ({
     item,
     currentUser,
     router,
+
     hasShadow = true,
     showMoreIcon = true,
     showDeleteIcon = false,
@@ -53,14 +54,107 @@ const MyPostCard = ({
     // const createAt = moment(item?.created_at).format('MMM D');
     const createAt = moment(item?.created_at).fromNow();
     //
-    const [likes, setLikes] = useState([]);
+    const [likeCount, setLikeCount] = useState(0);
+    const [localLiked, setLocalLiked] = useState(false);
+    const [postLikeDetails, setPostLikeDetails] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const lastClickTime = useRef(0);
 
 
     // console.log('postItem: ', item);
     useEffect(() => {
-        setLikes(item?.postLikes);
-    }, [])
+        // Khởi tạo số lượng like từ item.likes
+
+        if (item?.likes && Array.isArray(item.likes) && item.likes.length > 0) {
+            console.log("Detected likes data:", item.likes);
+
+            // Kiểm tra xem likes có cấu trúc count hay không
+            if (item.likes[0]?.count !== undefined) {
+                // Cấu trúc cũ: likes có chứa count
+                setLikeCount(item.likes[0].count);
+                console.log("Set count from likes[0].count:", item.likes[0].count);
+            } else {
+                // Cấu trúc mới: likes là mảng các chi tiết like
+                setLikeCount(item.likes.length);
+                setPostLikeDetails(item.likes);
+                console.log("Set count from likes.length:", item.likes.length);
+
+                // Kiểm tra người dùng đã like bài viết chưa
+                const userLiked = item.likes.some(like => like.userId === currentUser?.id);
+                setLocalLiked(userLiked);
+                console.log("Set localLiked:", userLiked);
+            }
+        } else {
+            // Khởi tạo giá trị mặc định khi không có dữ liệu
+            setLikeCount(0);
+            setPostLikeDetails([]);
+            setLocalLiked(false);
+            console.log("No likes data, setting defaults");
+        }
+    }, [item, currentUser?.id]);
+
+    const onLike = async () => {
+        // Chống click spam
+        const now = Date.now();
+        if (now - lastClickTime.current < 500 || isProcessing) {
+            return;
+        }
+
+        lastClickTime.current = now;
+        setIsProcessing(true);
+        setLocalLiked(!localLiked);
+        setLikeCount(prev => localLiked ? Math.max(0, prev - 1) : prev + 1);
+
+        try {
+            if (localLiked) {
+                // Unlike
+                let res = await removePostLike(item?.id, currentUser?.id);
+                console.log('remove likes response:', res);
+
+                if (!res.success) {
+                    // Khôi phục UI nếu API thất bại
+                    setLocalLiked(true);
+                    setLikeCount(prev => prev + 1);
+                    Alert.alert('Post Like:', "Something went wrong!");
+                } else {
+                    // Cập nhật chi tiết likes
+                    setPostLikeDetails(prev =>
+                        prev.filter(like => like.userId !== currentUser?.id)
+                    );
+                }
+            } else {
+                // Like
+                let data = {
+                    userId: currentUser?.id,
+                    postId: item?.id
+                };
+
+                let res = await createPostLike(data);
+                console.log('add likes response:', res);
+
+                if (!res.success) {
+                    // Khôi phục UI nếu API thất bại
+                    setLocalLiked(false);
+                    setLikeCount(prev => Math.max(0, prev - 1));
+                    Alert.alert('Post Like:', "Something went wrong!");
+                } else if (res.data) {
+                    // Cập nhật chi tiết likes với data trả về từ API
+                    setPostLikeDetails(prev => [...prev, res.data]);
+                }
+            }
+        } catch (error) {
+            console.error('Like/unlike error:', error);
+            // Khôi phục UI nếu có lỗi
+            setLocalLiked(!localLiked);
+            setLikeCount(prev => localLiked ? prev + 1 : Math.max(0, prev - 1));
+            Alert.alert('Error', 'Could not process like action');
+        } finally {
+            setTimeout(() => {
+                setIsProcessing(false);
+            }, 500);
+        }
+    };
 
     const openPostDetails = () => {
         if (!showMoreIcon) return null;
@@ -70,47 +164,7 @@ const MyPostCard = ({
         });
     };
     // likes, share
-    const onLike = async () => {
-        if (liked) {
-            let UpdateLikes = likes.filter(likes => likes.userId != currentUser?.id);
 
-            setLikes([...UpdateLikes]);
-            // console.log('data like :', data);
-            let res = await removePostLike(item?.id, currentUser?.id);
-            console.log('remove likes: ', res);
-
-            if (!res.success) {
-                Alert.alert('Post Like:', "Some thing wrong!")
-            }
-        } else {
-            let data = {
-                userId: currentUser?.id,
-                postId: item?.id
-            }
-            setLikes([...likes, data]);
-            // console.log('data like :', data);
-            let res = await createPostLike(data);
-            console.log('add likes: ', res);
-
-            if (!res.success) {
-                Alert.alert('Post Like:', "Some thing wrong!")
-            }
-        }
-
-
-    }
-    //
-    // const onShare = async () => {
-    //     let context = {message: scriptHtmlTags(item?.body)};
-
-    //     if(item?.file){
-    //         let url = await downloadFile(getSupabaseFileUrl(item?.file).uri);
-    //         context.url = url;
-    //         console.log('ddax share', context)
-    //     }
-
-    //     Share.share(context);
-    // } 
     const onShare = async () => {
         const hasBody = !!item?.body;
         const isImage = item?.file && item.file.includes('postImages');
@@ -232,8 +286,6 @@ const MyPostCard = ({
 
     }
 
-    const liked = likes.filter(likes => likes.userId == currentUser?.id)[0] ? true : false;
-
     return (
         <View style={[styles.container, hasShadow && shadowStyles]}>
             <View style={styles.header}>
@@ -316,13 +368,13 @@ const MyPostCard = ({
                 <View style={styles.footerButton}>
                     <TouchableOpacity onPress={onLike}>
                         <Icon.Heart
-                            color={liked ? theme.colors.rose : theme.colors.textLight}
+                            color={localLiked ? theme.colors.rose : theme.colors.textLight}
                             height={30} width={30}
-                            fill={liked ? theme.colors.rose : 'none'} />
+                            fill={localLiked ? theme.colors.rose : 'none'} />
                     </TouchableOpacity>
                     <Text style={styles.count}>
                         {
-                            likes?.length
+                            likeCount
                         }
                     </Text>
                 </View>

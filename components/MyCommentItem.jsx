@@ -11,6 +11,7 @@ const MyCommentItem = ({
   item,
   canDelete = false,
   onDelete = () => { },
+  highlight = false,
 }) => {
 
   const createdAt = moment(item?.created_at).fromNow();
@@ -28,7 +29,9 @@ const MyCommentItem = ({
       }
     ])
   }
+  console.log(highlight);
   return (
+    
     <View style={styles.container}>
       {/* avatar */}
       <MyAvatar
@@ -36,7 +39,7 @@ const MyCommentItem = ({
         size={hp(4)}
 
       />
-      <View style={styles.content}>
+      <View style={[styles.content, highlight && styles.highLight]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={styles.text}>
             {item?.user?.name}

@@ -57,7 +57,7 @@ export const fetchPosts = async (limit = 15, userId) => {
             .select(`
                *,
                user: users(id, name, image),
-               postLikes (*),
+               likes (*),
                comments (count)
                `)
             .order('created_at', { ascending: false })
@@ -75,7 +75,7 @@ export const fetchPosts = async (limit = 15, userId) => {
             .select(`
                *,
                user: users(id, name, image),
-               postLikes (*),
+               likes (*),
                comments (count)
                `)
             .order('created_at', { ascending: false })
@@ -100,7 +100,7 @@ export const fetchPosts = async (limit = 15, userId) => {
 export const createPostLike = async (postLike) => {
    try {
       const { data, error } = await supabase
-         .from('postLikes')
+         .from('likes')
          .insert(postLike)
          .select()
          .single();
@@ -122,7 +122,7 @@ export const createPostLike = async (postLike) => {
 export const removePostLike = async (postId, userId) => {
    try {
       const { error } = await supabase
-         .from('postLikes')
+         .from('likes')
          .delete()
          .eq('userId', userId)
          .eq('postId', postId)
@@ -131,7 +131,7 @@ export const removePostLike = async (postId, userId) => {
          console.log('postLike error: ', error);
          return { success: false, msg: 'Không thể xóa like post' };
       }
-      return { success: true };
+      return { success: true, data: { postId, userId } };
 
 
 
@@ -141,7 +141,7 @@ export const removePostLike = async (postId, userId) => {
    }
 }
 
-// fetch Post
+// fetch Post Details
 export const fetchPostsDetails = async (postId) => {
    try {
       const { data, error } = await supabase
@@ -149,7 +149,7 @@ export const fetchPostsDetails = async (postId) => {
          .select(`
         *,
         user: users(id, name, image),
-        postLikes (*),
+        likes (*),
         comments (*, user: users(id, name, image))
     `)
          .eq('id', postId)
