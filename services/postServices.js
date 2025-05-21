@@ -49,7 +49,7 @@ export const createOrUpdatePost = async (post) => {
 }
 
 // fetch Post
-export const fetchPosts = async (limit = 15, userId) => {
+export const fetchPosts = async (limit = 15, userId, offset = 0) => {
    try {
       if (userId) {
          const { data, error } = await supabase
@@ -79,7 +79,7 @@ export const fetchPosts = async (limit = 15, userId) => {
                comments (count)
                `)
             .order('created_at', { ascending: false })
-            .limit(limit);
+            .range(offset, offset + limit - 1);
 
          if (error) {
             console.log('fetchPost error: ', error);

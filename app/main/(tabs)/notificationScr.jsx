@@ -1,13 +1,13 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import React, { useEffect, useState } from 'react'
-import { fetchNotification } from '../../services/notificationServices';
-import { useAuth } from '../../context/AuthContext';
-import { hp, wp } from '../../helper/common';
-import { theme } from '../../constants/theme';
-import ScreenWrapper from '../../components/ScreenWrapper';
+import { fetchNotification } from '../../../services/notificationServices';
+import { useAuth } from '../../../context/AuthContext';
+import { hp, wp } from '../../../helper/common';
+import { theme } from '../../../constants/theme';
+import ScreenWrapper from '../../../components/ScreenWrapper';
 import { useRouter } from 'expo-router';
-import MyNotifiItem from '../../components/MyNotifiItem';
-import MyHeader from '../../components/MyHeader';
+import MyNotifiItem from '../../../components/MyNotifiItem';
+import MyHeader from '../../../components/MyHeader';
 
 const NotificationScr = () => {
 

@@ -67,30 +67,30 @@ const MyPostCard = ({
         // Khởi tạo số lượng like từ item.likes
 
         if (item?.likes && Array.isArray(item.likes) && item.likes.length > 0) {
-            console.log("Detected likes data:", item.likes);
+            // console.log("Detected likes data:", item.likes);
 
             // Kiểm tra xem likes có cấu trúc count hay không
             if (item.likes[0]?.count !== undefined) {
                 // Cấu trúc cũ: likes có chứa count
                 setLikeCount(item.likes[0].count);
-                console.log("Set count from likes[0].count:", item.likes[0].count);
+                // console.log("Set count from likes[0].count:", item.likes[0].count);
             } else {
                 // Cấu trúc mới: likes là mảng các chi tiết like
                 setLikeCount(item.likes.length);
                 setPostLikeDetails(item.likes);
-                console.log("Set count from likes.length:", item.likes.length);
+                // console.log("Set count from likes.length:", item.likes.length);
 
                 // Kiểm tra người dùng đã like bài viết chưa
                 const userLiked = item.likes.some(like => like.userId === currentUser?.id);
                 setLocalLiked(userLiked);
-                console.log("Set localLiked:", userLiked);
+                // console.log("Set localLiked:", userLiked);
             }
         } else {
             // Khởi tạo giá trị mặc định khi không có dữ liệu
             setLikeCount(0);
             setPostLikeDetails([]);
             setLocalLiked(false);
-            console.log("No likes data, setting defaults");
+            // console.log("No likes data, setting defaults");
         }
     }, [item, currentUser?.id]);
 

@@ -1,17 +1,17 @@
 import { Alert, FlatList, Pressable, StyleSheet, Text, Touchable, TouchableOpacity, View } from 'react-native'
 import React, { useState } from 'react'
-import ScreenWrapper from '../../components/ScreenWrapper'
-import { useAuth } from '../../context/AuthContext'
+import ScreenWrapper from '../../../components/ScreenWrapper'
+import { useAuth } from '../../../context/AuthContext'
 import { useRouter } from 'expo-router'
-import Header from '../../components/MyHeader'
-import { hp, wp } from '../../helper/common'
+import Header from '../../../components/MyHeader'
+import { hp, wp } from '../../../helper/common'
 import * as Icon from 'react-native-feather';
-import { supabase } from '../../lib/supabase'
-import Avatar from '../../components/MyAvatar'
-import { theme } from '../../constants/theme'
-import { fetchPosts } from '../../services/postServices'
-import MyLoading from '../../components/MyLoading'
-import MyPostCard from '../../components/MyPostCard'
+import { supabase } from '../../../lib/supabase'
+import Avatar from '../../../components/MyAvatar'
+import { theme } from '../../../constants/theme'
+import { fetchPosts } from '../../../services/postServices'
+import MyLoading from '../../../components/MyLoading'
+import MyPostCard from '../../../components/MyPostCard'
 
 const ProfileScr = () => {
   const { user, setAuth } = useAuth();

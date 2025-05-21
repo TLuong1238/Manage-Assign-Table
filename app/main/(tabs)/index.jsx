@@ -1,56 +1,83 @@
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import ScreenWrapper from '../../components/ScreenWrapper'
-import MyButton from '../../components/MyButton'
-import { useAuth } from '../../context/AuthContext'
-import { supabase } from '../../lib/supabase'
-import { hp, wp } from '../../helper/common'
-import { theme } from '../../constants/theme'
+import ScreenWrapper from '../../../components/ScreenWrapper'
+import { useAuth } from '../../../context/AuthContext'
+import { supabase } from '../../../lib/supabase'
+import { hp, wp } from '../../../helper/common'
+import { theme } from '../../../constants/theme'
 import * as Icon from 'react-native-feather';
 import { useRouter } from 'expo-router'
-import MyAvatar from '../../components/MyAvatar'
-import { fetchPosts } from '../../services/postServices'
-import PostCard from '../../components/MyPostCard'
-import MyLoading from '../../components/MyLoading'
-import { getUserData } from '../../services/userService'
-import MyPostCard from '../../components/MyPostCard'
+import MyAvatar from '../../../components/MyAvatar'
+import { fetchPosts } from '../../../services/postServices'
+import MyLoading from '../../../components/MyLoading'
+import { getUserData } from '../../../services/userService'
+import MyPostCard from '../../../components/MyPostCard'
 
 const HomeScr = () => {
 
   const { user } = useAuth();
   const router = useRouter();
-  const [limit, setLimit] = useState(10);
+  const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [posts, setPosts] = useState([]);
   const [notificationCount, setNotificationCount] = useState(0);
   const postsMapRef = useRef(new Map());
-
+  const limit = 10;
+  console.log(posts.length);
   // Tối ưu hóa fetch posts với debounce
-  const getPosts = useCallback(async (isInitialFetch = false) => {
-    if (!hasMore && !isInitialFetch) return;
+  //   const getPosts = useCallback(async (isInitialFetch = false) => {
+  //     if (!hasMore && !isInitialFetch) {
+  //       return;
+  //       console.log('No more posts to fetch');
+  //     }
+
+  //     try {
+  //       const newLimit = isInitialFetch ? limit : limit + 10;
+  //       console.log('Fetching posts:', newLimit);
+
+  //       const res = await fetchPosts(newLimit);
+
+  //       if (res.success) {
+  //         // Chuyển đổi dữ liệu thành Map để xử lý hiệu quả hơn
+  //         const newPostsMap = new Map();
+  //         res.data.forEach(post => {
+  //           newPostsMap.set(post.id, post);
+  //         });
+  //         postsMapRef.current = newPostsMap;
+
+  //         setPosts(res.data);
+  //         setLimit(newLimit);
+  //         setHasMore(res.data.length === newLimit && res.data.length > posts.length);
+  // V      }
+  //     } catch (error) {
+  //       console.error('Error fetching posts:', error);
+  //     }
+  //   }, [limit, hasMore, posts.length]);
+  const getPosts = useCallback(async () => {
+    if (loading || !hasMore) return;
+    setLoading(true);
 
     try {
-      const newLimit = isInitialFetch ? limit : limit + 10;
-      console.log('Fetching posts:', newLimit);
-
-      const res = await fetchPosts(newLimit);
+      const offset = posts.length;
+      const res = await fetchPosts(limit, undefined, offset);
 
       if (res.success) {
-        // Chuyển đổi dữ liệu thành Map để xử lý hiệu quả hơn
-        const newPostsMap = new Map();
+        // Thêm post mới vào Map và tránh trùng
         res.data.forEach(post => {
-          newPostsMap.set(post.id, post);
+          postsMapRef.current.set(post.id, post);
         });
-        postsMapRef.current = newPostsMap;
 
-        setPosts(res.data);
-        setLimit(newLimit);
-        setHasMore(posts.length !== res.data.length);
+        // Cập nhật state (nối thêm vào danh sách)
+        setPosts(prev => [...prev, ...res.data]);
+
+        setHasMore(res.data.length === limit); // Nếu trả về đủ LIMIT thì có thể còn nữa
       }
     } catch (error) {
       console.error('Error fetching posts:', error);
+    } finally {
+      setLoading(false);
     }
-  }, [limit, hasMore, posts.length]);
+  }, [loading, hasMore, posts.length]);
 
   // Xử lý sự kiện realtime với memoization
   const handlePostEvent = useCallback(async (payload) => {
@@ -72,7 +99,7 @@ const HomeScr = () => {
 
             // Thêm vào Map và cập nhật state
             postsMapRef.current.set(newPost.id, newPost);
-            setPosts([newPost, ...posts.filter(p => p.id !== newPost.id)]);
+            setPosts(prevPosts => [newPost, ...prevPosts.filter(p => p.id !== newPost.id)]);
           }
           break;
 
@@ -383,10 +410,10 @@ const HomeScr = () => {
           />
           }
           onEndReached={() => {
-            if (hasMore) getPosts();
+            if (hasMore && !loading) getPosts();
           }}
           onEndReachedThreshold={0.2}
-          ListFooterComponent={hasMore ? (
+          ListFooterComponent={hasMore && loading ? (
             <View style={{ marginVertical: posts.length == 0 ? 200 : 30 }}>
               <MyLoading />
             </View>
