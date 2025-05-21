@@ -22,7 +22,7 @@ export const createNotification = async (notification) => {
     }
 }
 // fetch notification
-export const fetchNotification = async (receiverId) => {
+export const fetchNotification = async (receiverId, limit =20, offset = 0) => {
     try {
         const { data, error } = await supabase
             .from('notifications')
@@ -32,6 +32,7 @@ export const fetchNotification = async (receiverId) => {
                  `)
             .eq('receiverId', receiverId)
             .order('created_at', { ascending: false })
+            .range(offset, offset + limit - 1);
 
         if (error) {
             console.log('fetch Notification error: ', error);

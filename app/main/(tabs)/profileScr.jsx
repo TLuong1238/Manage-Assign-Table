@@ -1,5 +1,5 @@
 import { Alert, FlatList, Pressable, StyleSheet, Text, Touchable, TouchableOpacity, View } from 'react-native'
-import React, { useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import ScreenWrapper from '../../../components/ScreenWrapper'
 import { useAuth } from '../../../context/AuthContext'
 import { useRouter } from 'expo-router'
@@ -17,12 +17,12 @@ const ProfileScr = () => {
   const { user, setAuth } = useAuth();
   const router = useRouter();
   //
-  const [limit, setLimit] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const limit = 10;
   const [hasMore, setHasMore] = useState(true);
   const [posts, setPosts] = useState([]);
+  const postsMapRef = useRef(new Map());
 
-
-  // console.log('userData:', user);
   const onLogout = async () => {
     setAuth(null);
     const { error } = await supabase.auth.signOut();
@@ -46,27 +46,39 @@ const ProfileScr = () => {
       }
     ])
   }
-  // Get user post
-  const getPosts = async () => {
-    console.log('đã gọi')
-    if (!hasMore) return null;
-    const newLimit = limit + 10;
-    console.log('fetching post: ', newLimit);
-    let res = await fetchPosts(newLimit, user.id);
-    if (res.success) {
-      if (posts.length == res.data.length) {
-        console.log('da set false')
-        setHasMore(false); // Không còn dữ liệu để load thêm
-      }
-      setLimit(newLimit);
-      setPosts(res.data);
-      console.log('da post')
+  
+  const getPosts = useCallback(async () => {
+    if (loading || !hasMore) return;
+    setLoading(true);
 
+    try {
+      const offset = posts.length;
+      const res = await fetchPosts(limit, user.id, offset);
+
+      if (res.success) {
+        // Thêm post mới vào Map và tránh trùng
+        res.data.forEach(post => {
+          postsMapRef.current.set(post.id, post);
+        });
+
+        // Cập nhật state (nối thêm vào danh sách)
+        setPosts(prev => {
+          const existingIds = new Set(prev.map(p => p.id));
+          const newUniquePosts = res.data.filter(post => !existingIds.has(post.id));
+          return [...prev, ...newUniquePosts];
+        });
+
+        setHasMore(res.data.length === limit); // Nếu trả về đủ LIMIT thì có thể còn nữa
+      }
+    } catch (error) {
+      console.error('Error fetching posts:', error);
+    } finally {
+      setLoading(false);
     }
-  }
+  }, [loading, hasMore, posts.length]);
 
   return (
-    <ScreenWrapper bg = {'white'}>
+    <ScreenWrapper bg={'white'}>
       {/* user post */}
       <FlatList
         ListHeaderComponent={<UserHeader user={user} router={router} handleLogout={handleLogout} />}
@@ -83,20 +95,15 @@ const ProfileScr = () => {
         />
         }
         onEndReached={() => {
-          if (hasMore) getPosts();
+          if (hasMore && !loading) getPosts();
         }}
         onEndReachedThreshold={0.2}
-        ListFooterComponent={hasMore ? (
+        ListFooterComponent={hasMore && loading ? (
           <View style={{ marginVertical: posts.length == 0 ? 100 : 30 }}>
             <MyLoading />
           </View>
-        ) : (
-          <View style={{ marginVertical: 20 }}>
-            <Text style={styles.noPosts}>
-              Bạn đã xem hết nội dung...
-            </Text>
-          </View>
-        )
+        ) 
+          : null
 
         }
 

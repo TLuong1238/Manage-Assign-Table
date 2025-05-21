@@ -100,8 +100,6 @@ const NewPostScr = () => {
     // console.log('bodyRef.current:', bodyRef.current);
     // console.log('file:', file);
 
-    console.log("Post data:", post, typeof post);
-    console.log("Post ID:", post?.id, typeof post?.id);
     if (isBodyEmpty(bodyRef.current) && !file) {
       Alert.alert("Thông báo!", "Hãy nêu suy nghĩ của bạn hoặc thêm ảnh và video!");
       return;

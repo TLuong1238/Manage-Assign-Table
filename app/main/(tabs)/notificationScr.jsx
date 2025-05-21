@@ -8,26 +8,20 @@ import ScreenWrapper from '../../../components/ScreenWrapper';
 import { useRouter } from 'expo-router';
 import MyNotifiItem from '../../../components/MyNotifiItem';
 import MyHeader from '../../../components/MyHeader';
-
+import useNotiRt from '../../../hook/useNotiRt';
 const NotificationScr = () => {
 
-  const [notifications, setNotifications] = useState([]);
   const { user } = useAuth();
   const router = useRouter();
 
+  const {
+    noti,
+    loading,
+    hasMore,
+    getNotis,
 
+  } = useNotiRt(user, 10);
 
-  useEffect(() => {
-    getNotifications();
-  }, [])
-
-  const getNotifications = async () => {
-    let res = await fetchNotification(user.id);
-    console.log('resNotifi:', res);
-    if(res.success) {
-      setNotifications(res.data);
-    }
-  }
 
 
   return (
@@ -38,18 +32,21 @@ const NotificationScr = () => {
           showVerticalScrollIndicator={false}
           contentContainerStyle={styles.listStyle}>
           {
-            notifications.map(item => {
+            noti.map(item => {
+
               return (
                 <MyNotifiItem
                   key={item?.id}
                   item={item}
                   router={router}
+
                 />
+
               )
             })
           }
           {
-            notifications.length == 0 && (
+            noti.length == 0 && (
               <Text style={styles.noData}>
                 Không có thông báo nào
               </Text>

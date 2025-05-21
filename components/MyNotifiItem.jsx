@@ -12,7 +12,7 @@ const MyNotifiItem = (
         router
     }
 ) => {
-
+    console.log('Sender image URL:', item?.sender?.image);
     const createAt = moment(item?.created_at).fromNow();
     const handleNotiClick = () => {
         try {
@@ -21,10 +21,10 @@ const MyNotifiItem = (
                 console.log('Notification data is empty');
                 return;
             }
-            
+
             // Parse JSON và kiểm tra kết quả
             const parsedData = JSON.parse(item.data);
-            
+
             // Kiểm tra nếu kết quả là array
             if (Array.isArray(parsedData)) {
                 const [postId, commentId] = parsedData;
@@ -35,11 +35,11 @@ const MyNotifiItem = (
                         commentId
                     }
                 });
-            } 
+            }
             // Kiểm tra nếu kết quả là object
             else if (typeof parsedData === 'object') {
                 const { postId, commentId } = parsedData;
-                
+
                 if (postId) {
                     router.push({
                         pathname: `main/postDetailsScr`,

@@ -35,9 +35,9 @@ export default function TabsLayout() {
 
       {/* Tab profile */}
       <Tabs.Screen
-        name="profileScr"  // Tên file tableScr.jsx trong (tabs)
+        name="searchScr"  // Tên file tableScr.jsx trong (tabs)
         options={{
-          title: 'Đặt bàn',
+          title: 'Tìm kiếm',
           tabBarIcon: ({ color }) => (
             <Icon.Layers stroke={color} width={hp(2.5)} height={hp(2.5)} />
           ),
@@ -57,9 +57,9 @@ export default function TabsLayout() {
 
       {/* Tab Hồ sơ */}
       <Tabs.Screen
-        name="searchScr"  // Tên file profileScr.jsx trong (tabs)
+        name="profileScr"  // Tên file profileScr.jsx trong (tabs)
         options={{
-          title: 'Tìm kiếm',
+          title: 'Thông tin',
           tabBarIcon: ({ color }) => (
             <Icon.User stroke={color} width={hp(2.5)} height={hp(2.5)} />
           ),

@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import React from 'react'
 import { theme } from '../constants/theme'
 import { hp } from '../helper/common'
-import Loading from './MyLoading'
+import MyLoading from './MyLoading'
 
 const MyButton = (
     {buttonStyle,
@@ -25,7 +25,7 @@ const MyButton = (
     if(loading){
         return (
             <View style ={[styles.button,buttonStyle, {backgroundColor:"white"}]}>
-                <Loading />
+                <MyLoading />
             </View>
         )
     }
