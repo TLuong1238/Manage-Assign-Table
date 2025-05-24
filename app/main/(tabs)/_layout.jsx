@@ -4,6 +4,7 @@ import { Slot, Tabs } from 'expo-router'
 import { theme } from '../../../constants/theme'
 import { hp } from '../../../helper/common'
 import * as Icon from 'react-native-feather'
+import AntDesign from '@expo/vector-icons/AntDesign';
 
 export default function TabsLayout() {
     return (
@@ -32,12 +33,21 @@ export default function TabsLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="socialScr"  // Tên file index.jsx trong (tabs)
+        options={{
+          title: 'Mạng xã hội',  // Tên hiển thị
+          tabBarIcon: ({ color }) => (
+            <AntDesign name="cloudo" size={24} color="black" />
+          ),
+        }}
+      />
 
       {/* Tab profile */}
       <Tabs.Screen
-        name="searchScr"  // Tên file tableScr.jsx trong (tabs)
+        name="assignTableScr"  // Tên file tableScr.jsx trong (tabs)
         options={{
-          title: 'Tìm kiếm',
+          title: 'Đặt bàn',
           tabBarIcon: ({ color }) => (
             <Icon.Layers stroke={color} width={hp(2.5)} height={hp(2.5)} />
           ),

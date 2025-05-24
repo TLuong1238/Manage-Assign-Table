@@ -26,12 +26,10 @@ const WelcomeScr = () => {
           <MyButton
             title="Get Started"
             buttonSyle={{ marginHorizontal: wp(3) }}
-            // onPress={() => navigation.navigate('SignUp')}
             onPress={() => router.push('/signUpScr')}
           />
           <View style={styles.bottomContainer}>
             <Text style={styles.LoginText}>Already have an account?</Text>
-            {/* <Pressable onPress={() => navigation.navigate('Login')}> */}
             <Pressable onPress={() => router.push('/loginScr')}>
               <Text style={[styles.LoginText, { color: theme.colors.primaryDark, fontWeight: 'semibold' }]}>
                 Login

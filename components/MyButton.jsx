@@ -46,7 +46,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         borderRadius: 20,
         borderCurve: 'continuous',
-        padding: 10
+        padding: 10,
     },
     text:{
         fontSize: hp(2.5),

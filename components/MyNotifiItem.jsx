@@ -12,7 +12,7 @@ const MyNotifiItem = (
         router
     }
 ) => {
-    console.log('Sender image URL:', item?.sender?.image);
+    // console.log('Sender image URL:', item?.sender?.image);
     const createAt = moment(item?.created_at).fromNow();
     const handleNotiClick = () => {
         try {
