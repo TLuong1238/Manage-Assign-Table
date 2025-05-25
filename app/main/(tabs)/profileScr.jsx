@@ -3,7 +3,6 @@ import React, { useCallback, useRef, useState } from 'react'
 import ScreenWrapper from '../../../components/ScreenWrapper'
 import { useAuth } from '../../../context/AuthContext'
 import { useRouter } from 'expo-router'
-import Header from '../../../components/MyHeader'
 import { hp, wp } from '../../../helper/common'
 import * as Icon from 'react-native-feather';
 import { supabase } from '../../../lib/supabase'
@@ -12,16 +11,19 @@ import { theme } from '../../../constants/theme'
 import { fetchPosts } from '../../../services/postServices'
 import MyLoading from '../../../components/MyLoading'
 import MyPostCard from '../../../components/MyPostCard'
+import usePostRt from '../../../hook/usePostRt'
+import MyHeader from '../../../components/MyHeader'
 
 const ProfileScr = () => {
   const { user, setAuth } = useAuth();
   const router = useRouter();
   //
-  const [loading, setLoading] = useState(false);
-  const limit = 10;
-  const [hasMore, setHasMore] = useState(true);
-  const [posts, setPosts] = useState([]);
-  const postsMapRef = useRef(new Map());
+  const {
+    posts,
+    loading,
+    hasMore,
+    getPosts,
+  } = usePostRt(user, 10, true);
 
   const onLogout = async () => {
     setAuth(null);
@@ -47,38 +49,10 @@ const ProfileScr = () => {
     ])
   }
   
-  const getPosts = useCallback(async () => {
-    if (loading || !hasMore) return;
-    setLoading(true);
-
-    try {
-      const offset = posts.length;
-      const res = await fetchPosts(limit, user.id, offset);
-
-      if (res.success) {
-        // Thêm post mới vào Map và tránh trùng
-        res.data.forEach(post => {
-          postsMapRef.current.set(post.id, post);
-        });
-
-        // Cập nhật state (nối thêm vào danh sách)
-        setPosts(prev => {
-          const existingIds = new Set(prev.map(p => p.id));
-          const newUniquePosts = res.data.filter(post => !existingIds.has(post.id));
-          return [...prev, ...newUniquePosts];
-        });
-
-        setHasMore(res.data.length === limit); // Nếu trả về đủ LIMIT thì có thể còn nữa
-      }
-    } catch (error) {
-      console.error('Error fetching posts:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [loading, hasMore, posts.length]);
+  
 
   return (
-    <ScreenWrapper bg={'white'}>
+    <ScreenWrapper bg={'#FFBF00'}>
       {/* user post */}
       <FlatList
         ListHeaderComponent={<UserHeader user={user} router={router} handleLogout={handleLogout} />}
@@ -114,9 +88,9 @@ const ProfileScr = () => {
 
 const UserHeader = ({ user, router, handleLogout }) => {
   return (
-    <View style={{ flex: 1, backgroundColor: 'white', paddingHorizontal: wp(2) }}>
+    <View style={{ flex: 1, backgroundColor: '#FFBF00', paddingHorizontal: wp(2) }}>
       <View>
-        <Header title="Profile " />
+        <MyHeader title="Profile" showBackButton={false} />
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Icon.Power strokeWidth={2} width={wp(5)} height={wp(5)} color={'red'} />
         </TouchableOpacity>

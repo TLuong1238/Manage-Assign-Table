@@ -1,18 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View, ScrollView, Alert, StatusBar, FlatList, Pressable } from 'react-native';
-import ScreenWrapper from '../../../components/ScreenWrapper';
-import MyHeader from '../../../components/MyHeader';
-import MyInput from '../../../components/MyInput';
-import MyButton from '../../../components/MyButton';
-import MyTableItem from '../../../components/MyTableItem';
-import { fetchTable } from '../../../services/tableService';
-import { hp, wp } from '../../../helper/common';
-import { theme } from '../../../constants/theme';
+import ScreenWrapper from '../../components/ScreenWrapper';
+import MyHeader from '../../components/MyHeader';
+import MyInput from '../../components/MyInput';
+import MyButton from '../../components/MyButton';
+import MyTableItem from '../../components/MyTableItem';
+import { fetchTable } from '../../services/tableService';
+import { hp, wp } from '../../helper/common';
+import { theme } from '../../constants/theme';
 import * as Icon from 'react-native-feather';
 
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { TouchableOpacity } from 'react-native';
-import { fetchBill, fetchBillByTimeRange } from '../../../services/billService';
+import { fetchBill, fetchBillByTimeRange } from '../../services/billService';
 
 
 const AssignTableScr = () => {

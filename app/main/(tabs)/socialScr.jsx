@@ -32,7 +32,7 @@ const HomeScr = () => {
 
 
   return (
-    <ScreenWrapper bg='white'>
+    <ScreenWrapper bg='#FFBF00'>
       <View style={styles.container}>
         {/* header */}
         <View style={styles.header}>

@@ -3,78 +3,79 @@ import React from 'react'
 import { Slot, Tabs } from 'expo-router'
 import { theme } from '../../../constants/theme'
 import { hp } from '../../../helper/common'
-import * as Icon from 'react-native-feather'
+import Feather from '@expo/vector-icons/Feather';
 import AntDesign from '@expo/vector-icons/AntDesign';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 export default function TabsLayout() {
-    return (
-        <Tabs
+  return (
+    <Tabs
       screenOptions={{
-        headerShown: false,  // Ẩn header
-        tabBarActiveTintColor: theme.colors.primaryDark,  // Màu khi tab đang active
-        tabBarInactiveTintColor: theme.colors.textLight,  // Màu khi tab không active
+        headerShown: false, 
+        tabBarShowLabel: false,  
+        tabBarActiveTintColor: '#FFBF00',  
+        tabBarInactiveTintColor: theme.colors.textLight,
+        
+
         tabBarStyle: {
-          height: hp(7),  // Chiều cao của thanh tab
-          paddingBottom: hp(1),  // Padding dưới
-          paddingTop: hp(1),  // Padding trên
-          backgroundColor: 'white',  // Màu nền của thanh tab
-          borderTopWidth: 1,  // Viền trên
-          borderTopColor: theme.colors.gray,  // Màu viền
+          height: hp(5),
+          backgroundColor: 'white',
+          justifyContent: 'center',
         },
       }}
     >
       {/* Tab Trang chủ */}
       <Tabs.Screen
-        name="index"  // Tên file index.jsx trong (tabs)
+        name="index"
         options={{
-          title: 'Trang chủ',  // Tên hiển thị
+          title: 'Trang chủ',
           tabBarIcon: ({ color }) => (
-            <Icon.Home stroke={color} width={hp(2.5)} height={hp(2.5)} />
+            <Ionicons name="home-outline" size={24} color={color} />
           ),
         }}
       />
+      {/* Mạng */}
       <Tabs.Screen
-        name="socialScr"  // Tên file index.jsx trong (tabs)
+        name="socialScr"
         options={{
-          title: 'Mạng xã hội',  // Tên hiển thị
+          title: 'Mạng xã hội',
           tabBarIcon: ({ color }) => (
-            <AntDesign name="cloudo" size={24} color="black" />
-          ),
-        }}
-      />
-
-      {/* Tab profile */}
-      <Tabs.Screen
-        name="assignTableScr"  // Tên file tableScr.jsx trong (tabs)
-        options={{
-          title: 'Đặt bàn',
-          tabBarIcon: ({ color }) => (
-            <Icon.Layers stroke={color} width={hp(2.5)} height={hp(2.5)} />
+            <AntDesign name="cloudo" size={24} color={color} />
           ),
         }}
       />
 
       {/* Tab Thông báo */}
       <Tabs.Screen
-        name="notificationScr"  // Tên file notificationScr.jsx trong (tabs)
+        name="notificationScr"
         options={{
           title: 'Thông báo',
           tabBarIcon: ({ color }) => (
-            <Icon.Bell stroke={color} width={hp(2.5)} height={hp(2.5)} />
+            <Ionicons name="notifications-outline" size={24} color={color} />
           ),
         }}
       />
-
+      {/* Tab lịch sử */}
+      <Tabs.Screen
+        name="historyScr"
+        options={{
+          title: 'Lịch sử',
+          tabBarIcon: ({ color }) => (
+            <MaterialIcons name="history" size={24} color={color} />
+          ),
+        }}
+      />
       {/* Tab Hồ sơ */}
       <Tabs.Screen
-        name="profileScr"  // Tên file profileScr.jsx trong (tabs)
+        name="profileScr"
         options={{
           title: 'Thông tin',
           tabBarIcon: ({ color }) => (
-            <Icon.User stroke={color} width={hp(2.5)} height={hp(2.5)} />
+            <Feather name="user" size={24} color={color} />
           ),
         }}
       />
     </Tabs>
-    )
+  )
 }

@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { fetchPosts } from '../services/postServices';
 import { getUserData } from '../services/userService';
 
-export default function usePostRt(user, limit = 10 ) {
+export default function usePostRt(user, limit = 10, own = false) {
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(false);
     const [hasMore, setHasMore] = useState(true);
@@ -20,7 +20,12 @@ export default function usePostRt(user, limit = 10 ) {
 
         try {
             const offset = posts.length;
-            const res = await fetchPosts(limit, undefined, offset);
+            let res;
+            if (own) {
+                res = await fetchPosts(limit, user.id, offset);
+            } else {
+                res = await fetchPosts(limit, undefined, offset);
+            }
 
             if (res.success) {
                 // Thêm post mới vào Map và tránh trùng
@@ -29,7 +34,12 @@ export default function usePostRt(user, limit = 10 ) {
                 });
 
                 // Cập nhật state (nối thêm vào danh sách)
-                setPosts(prev => [...prev, ...res.data]);
+                setPosts(prev => {
+                    // Lọc các post mới chưa có trong prev
+                    const prevIds = new Set(prev.map(p => p.id));
+                    const newPosts = res.data.filter(post => !prevIds.has(post.id));
+                    return [...prev, ...newPosts];
+                });
 
                 setHasMore(res.data.length === limit); // Nếu trả về đủ LIMIT thì có thể còn nữa
             }
@@ -60,7 +70,11 @@ export default function usePostRt(user, limit = 10 ) {
 
                         // Thêm vào Map và cập nhật state
                         postsMapRef.current.set(newPost.id, newPost);
-                        setPosts(prevPosts => [newPost, ...prevPosts.filter(p => p.id !== newPost.id)]);
+                        setPosts(prevPosts => {
+                            // Nếu đã có post này thì không thêm nữa
+                            if (prevPosts.some(p => p.id === newPost.id)) return prevPosts;
+                            return [newPost, ...prevPosts];
+                        });
                     }
                     break;
 
@@ -231,8 +245,8 @@ export default function usePostRt(user, limit = 10 ) {
 
 
     useEffect(() => {
-        if (!user) return;
-        const channelId = `posts-${Date.now()}`;
+        if (!user?.id) return;
+        const channelId = `posts-${user.id}`;
         console.log(`Setting up channel: ${channelId}`);
 
         // Kênh cho posts
@@ -254,7 +268,8 @@ export default function usePostRt(user, limit = 10 ) {
                 table: 'comments'
             }, handleCommentEvent)
             .subscribe(status => console.log(`Comments channel status: ${status}`));
-        //Kênh cho cotifications
+
+        // Kênh cho notifications
         const notificationsChannel = supabase
             .channel(`${channelId}-notifications`)
             .on('postgres_changes', {
@@ -264,16 +279,17 @@ export default function usePostRt(user, limit = 10 ) {
                 filter: `receiverId=eq.${user.id}`
             }, handleNewNotification)
             .subscribe(status => console.log(`Notifications channel status: ${status}`));
-        // THÊM KÊNH MỚI CHO LIKES
+
+        // Kênh cho likes
         const likesChannel = supabase
             .channel(`${channelId}-likes`)
             .on('postgres_changes', {
-                event: '*', // Lắng nghe cả INSERT và DELETE
+                event: '*',
                 schema: 'public',
                 table: 'likes'
             }, handleLikeEvent)
             .subscribe(status => console.log(`Likes channel status: ${status}`));
-        // Fetch dữ liệu ban đầu
+
         getPosts();
 
         return () => {
@@ -283,7 +299,7 @@ export default function usePostRt(user, limit = 10 ) {
             supabase.removeChannel(notificationsChannel);
             supabase.removeChannel(likesChannel);
         };
-    }, [handlePostEvent, handleCommentEvent, getPosts]);
+    }, [user?.id, own]);
 
     return {
         posts,

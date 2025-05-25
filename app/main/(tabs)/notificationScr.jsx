@@ -25,9 +25,12 @@ const NotificationScr = () => {
 
 
   return (
-    <ScreenWrapper>
+    <ScreenWrapper bg={'#FFBF00'}>
       <View style={styles.container}>
-        <MyHeader title={'Thông báo'} />
+        <MyHeader
+          title={'Thông báo'}
+          showBackButton={false}
+        />
         <ScrollView
           showVerticalScrollIndicator={false}
           contentContainerStyle={styles.listStyle}>
@@ -39,7 +42,6 @@ const NotificationScr = () => {
                   key={item?.id}
                   item={item}
                   router={router}
-
                 />
 
               )
