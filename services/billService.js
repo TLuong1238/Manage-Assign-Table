@@ -2,25 +2,25 @@ import { supabase } from "../lib/supabase";
 
 // Hàm tạo đặt bàn
 export const createBill = async (bill) => {
-  try {
-    console.log('createBill input:', bill);
-    
-    const { data, error } = await supabase
-      .from('bills')
-      .insert([bill])
-      .select();
+    try {
+        console.log('createBill input:', bill);
 
-    console.log('createBill response:', { data, error });
+        const { data, error } = await supabase
+            .from('bills')
+            .insert([bill])
+            .select();
 
-    if (error) {
-      console.log('createBill error details: ', error);
-      return { success: false, msg: error.message || 'Không thể đặt bàn' };
+        console.log('createBill response:', { data, error });
+
+        if (error) {
+            console.log('createBill error details: ', error);
+            return { success: false, msg: error.message || 'Không thể đặt bàn' };
+        }
+        return { success: true, data };
+    } catch (error) {
+        console.log('createBill catch error: ', error);
+        return { success: false, msg: error.message || 'Không thể đặt bàn' };
     }
-    return { success: true, data };
-  } catch (error) {
-    console.log('createBill catch error: ', error);
-    return { success: false, msg: error.message || 'Không thể đặt bàn' };
-  }
 };
 
 export const fetchBill = async () => {
@@ -129,4 +129,40 @@ export const createDetail = async (billId, tableIds, peopleCount) => {
         console.log('createDetail error: ', error);
         return { success: false, msg: 'Có lỗi xảy ra khi tạo chi tiết bill' };
     }
+};
+export const fetchBillByUser = async (userId) => {
+    try {
+        const { data, error } = await supabase
+            .from('bills')
+            .select('*')
+            .eq('userId', userId)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.log('fetchBillByUser error: ', error);
+            return { success: false, msg: 'Không thể lấy dữ liệu bill của user' };
+        }
+        return { success: true, data };
+    } catch (error) {
+        console.log('fetchBillByUser error: ', error);
+        return { success: false, msg: 'Có lỗi xảy ra khi lấy bill của user' };
+    }
+};
+export const updateBill = async (billId, updateData) => {
+  try {
+    const { data, error } = await supabase
+      .from('bills')
+      .update(updateData)
+      .eq('id', billId)
+      .select();
+
+    if (error) {
+      console.log('updateBill error: ', error);
+      return { success: false, msg: 'Không thể cập nhật bill' };
+    }
+    return { success: true, data };
+  } catch (error) {
+    console.log('updateBill error: ', error);
+    return { success: false, msg: 'Có lỗi xảy ra khi cập nhật bill' };
+  }
 };

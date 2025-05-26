@@ -25,39 +25,39 @@ const LoginScr = () => {
       Alert.alert('Thông báo', 'Vui lòng nhập đầy đủ thông tin!');
       return;
     }
-      let email = emailRef.current.trim();
-      let password = passwordRef.current.trim();
-      setLoading(true);
-      const {error} = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-      setLoading(false);
+    let email = emailRef.current.trim();
+    let password = passwordRef.current.trim();
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+    setLoading(false);
 
-      console.log('Lỗi',error);
+    console.log('Lỗi', error);
 
-      if(error){
-        Alert.alert('Thông báo', error.message);
-        return;
-      }
+    if (error) {
+      Alert.alert('Thông báo', error.message);
+      return;
+    }
 
-    
+
     // setLoading(true); 
   }
   return (
-    <ScreenWrapper bg='white'>
+    <ScreenWrapper bg='#FFBF00'>
       <StatusBar style="dark" />
       <View style={styles.container}>
         <MyBackButton />
         {/* welcomm */}
         <View>
-          <Text style={styles.welcomText} >Hey,</Text>
-          <Text style={styles.welcomText} >WelcomeBack!</Text>
+          <Text style={styles.welcomText} >Chào mừng,</Text>
+          <Text style={styles.welcomText} >Bạn đã quay trở lại!</Text>
         </View>
         {/* form */}
         <View style={{ gap: 20 }}>
-          <Text style={{ fontSize: hp(2.5), fontWeight: '500', color: theme.colors.text }}>
-            Please login to continous!
+          <Text style={{ fontSize: hp(2.5), fontWeight: '500', color: 'white' }}>
+            Vui lòng đăng nhập để tiếp tục!
           </Text>
 
           <MyInput
@@ -74,7 +74,9 @@ const LoginScr = () => {
           <Text style={styles.forgotPasswordText}>
             Quên mật khẩu?
           </Text>
-          <MyButton title='Đăng nhập' loading={loading} onPress={onSubmit} />
+          <MyButton title='Đăng nhập' loading={loading} onPress={onSubmit}
+            buttonStyle={{ width: wp(70), alignItems: 'center', alignSelf: 'center' }}
+          />
           {/* footer */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>Bạn chưa có tài khoản?</Text>

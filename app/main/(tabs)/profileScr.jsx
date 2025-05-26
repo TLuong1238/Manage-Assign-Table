@@ -48,8 +48,8 @@ const ProfileScr = () => {
       }
     ])
   }
-  
-  
+
+
 
   return (
     <ScreenWrapper bg={'#FFBF00'}>
@@ -76,7 +76,7 @@ const ProfileScr = () => {
           <View style={{ marginVertical: posts.length == 0 ? 100 : 30 }}>
             <MyLoading />
           </View>
-        ) 
+        )
           : null
 
         }
@@ -102,35 +102,32 @@ const UserHeader = ({ user, router, handleLogout }) => {
           <View style={styles.avatarContainer}>
             <Avatar
               uri={user?.image}
-              size={hp(18)}
+              size={hp(20)}
               rounded={50}
             />
             <Pressable style={styles.editIcon} onPress={() => router.push('/main/editProfileScr')}>
               <Icon.Edit strokeWidth={2} width={hp(3)} height={hp(3)} color={'black'} />
             </Pressable>
-          </View>
-          {/* userName */}
-          <View style={{ alignItems: 'center', gap: 5 }}>
-            <Text style={styles.userName}>{user && user.name} </Text>
-            <Text style={styles.userAddress}>{user && user.address} </Text>
-            {/* email, phone, bio */}
-            <View style={{ width: '100%', borderRadius: 15, borderWidth: 2, paddingHorizontal: 10 }}>
+
+            {/* userName */}
+            <View style={{ alignItems: 'flex-start',gap: 5, paddingLeft: 10 }}>
+              <Text style={styles.userName}>{user && user.name} </Text>
+              <Text style={{color: 'white'}}>{user && user.bio} </Text>
+              {/* email, phone, bio */}
+              {/* email, phone, bio */}
               <View style={styles.info}>
-                <Icon.Mail strokeWidth={2} height={hp(8)} width={wp(8)} color={theme.colors.textLight} />
+                <Icon.Mail strokeWidth={2} height={hp(2.5)} width={wp(5)} color={'white'} />
                 <Text style={styles.infoText}>{user.email}</Text>
               </View>
-            </View>
-            <View style={{ width: '100%', borderRadius: 15, borderWidth: 2, paddingHorizontal: 10 }}>
               <View style={styles.info}>
-                <Icon.Phone strokeWidth={2} height={hp(8)} width={wp(8)} color={theme.colors.textLight} />
+                <Icon.Phone strokeWidth={2} height={hp(2.5)} width={wp(5)} color={'white'} />
                 <Text style={styles.infoText}>{user?.phone || 'Bạn chưa cập nhật số điện thoại'}</Text>
               </View>
-            </View>
-            <View style={{ width: '100%', borderRadius: 15, borderWidth: 2, paddingHorizontal: 10 }}>
               <View style={styles.info}>
-                <Icon.Link strokeWidth={2} height={hp(8)} width={wp(8)} color={theme.colors.textLight} />
-                <Text style={styles.infoText}>{user?.bio || 'Bạn chưa cập nhật thông tin liên kết'}</Text>
+                <Icon.Home strokeWidth={2} height={hp(2.5)} width={wp(5)} color={'white'} />
+                <Text style={styles.infoText}>{user?.address || 'Bạn chưa cập nhật thông tin liên kết'}</Text>
               </View>
+
             </View>
           </View>
         </View>
@@ -157,13 +154,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   avatarContainer: {
-    alignSelf: 'center',
     marginTop: hp(2),
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   editIcon: {
     position: 'absolute',
     bottom: 0,
-    right: -12,
+    left: 130,
     backgroundColor: 'white',
     padding: 7,
     borderRadius: 50,
@@ -181,7 +179,8 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: hp(4),
     fontWeight: 'bold',
-    color: theme.colors.text,
+    color: 'white',
+    textAlign: 'flex-start',
   },
   info: {
     flexDirection: 'row',
@@ -190,8 +189,8 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start'
   },
   infoText: {
-    fontSize: hp(2.5),
-    color: theme.colors.textLight,
+    fontSize: hp(2),
+    color: 'white',
     fontWeight: '500',
   },
   listStyle: {

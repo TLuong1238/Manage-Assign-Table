@@ -35,5 +35,6 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     paddingHorizontal: 20,
     gap:15,
+    backgroundColor:'white'
   }
 })

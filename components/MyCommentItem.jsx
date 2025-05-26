@@ -36,7 +36,7 @@ const MyCommentItem = ({
       {/* avatar */}
       <MyAvatar
         uri={item?.user?.image}
-        size={hp(4)}
+        size={hp(6)}
 
       />
       <View style={[styles.content, highlight && styles.highLight]}>
@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   content: {
-    backgroundColor: 'rgba(0, 0, 0, 0.06)',
+    backgroundColor: 'white',
     flex: 1,
     gap: 5,
     borderRadius: 10,

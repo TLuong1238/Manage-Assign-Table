@@ -20,23 +20,23 @@ const SignUpScr = () => {
   const [loading, setLoading] = useState(false);
 
   const onSubmit = async () => {
-    if(!emailRef.current || !passwordRef.current|| !nameRef.current) {
+    if (!emailRef.current || !passwordRef.current || !nameRef.current) {
       Alert.alert('Thông báo', 'Vui lòng nhập đầy đủ thông tin!');
       return;
     }
-        
+
     let name = nameRef.current.trim();
     let email = emailRef.current.trim();
     let password = passwordRef.current.trim();
 
     setLoading(true);
 
-    const {data: {session},error} = await supabase.auth.signUp({
+    const { data: { session }, error } = await supabase.auth.signUp({
       email: email,
       password: password,
       options: {
         data: {
-           name,
+          name,
         }
       }
     });
@@ -44,8 +44,8 @@ const SignUpScr = () => {
     setLoading(false);
     // console.log('session',session);
     // console.log('error',error);
-    
-    if(error) {
+
+    if (error) {
       Alert.alert('Thông báo', error.message);
       return;
     }
@@ -54,47 +54,52 @@ const SignUpScr = () => {
   }
 
   return (
-    <ScreenWrapper bg = 'white'>
+    <ScreenWrapper bg='#FFBF00'>
       <StatusBar style="dark" />
       <View style={styles.container}>
         <BackButton />
         {/* welcomm */}
         <View>
-          <Text style={styles.welcomText} >Let's</Text>
-          <Text style={styles.welcomText} >Get Started!</Text>
+          <Text style={styles.welcomText} >Xin chào</Text>
+          <Text style={styles.welcomText} >Hãy bắt đầu!</Text>
         </View>
         {/* form */}
         <View style={{ gap: 20 }}>
-          <Text style={{ fontSize: hp(2.5), fontWeight: '500', color: theme.colors.text }}>
-            Please enter the details to create a new account!
+          <Text style={{ fontSize: hp(2.5), fontWeight: '500', color: 'white' }}>
+            Vui lòng điền thông tin chi tiết để tạo tài khoản!
           </Text>
-          
-          <MyInput 
-            icon={<Icon.User stroke ={theme.colors.dark} strokeWidth={2} width={26} height={26} />}
+
+          <MyInput
+            icon={<Icon.User stroke={theme.colors.dark} strokeWidth={2} width={26} height={26} />}
             placeholder='Nhập họ và tên của bạn...'
-            onChangeText = {value => nameRef.current = value}  
+            onChangeText={value => nameRef.current = value}
           />
-          <MyInput 
-            icon={<Icon.Mail stroke ={theme.colors.dark} strokeWidth={2} width={26} height={26} />}
+          <MyInput
+            icon={<Icon.Mail stroke={theme.colors.dark} strokeWidth={2} width={26} height={26} />}
             placeholder='Nhập email của bạn...'
-            onChangeText = {value => emailRef.current = value}  
+            onChangeText={value => emailRef.current = value}
           />
-          <MyInput 
-            icon={<Icon.Lock stroke ={theme.colors.dark} strokeWidth={2} width={26} height={26} />}
+          <MyInput
+            icon={<Icon.Lock stroke={theme.colors.dark} strokeWidth={2} width={26} height={26} />}
             placeholder='Nhập mật khẩu của bạn...'
             secureTextEntry
-            onChangeText = {value => passwordRef.current = value}  
+            onChangeText={value => passwordRef.current = value}
           />
           {/* <Text style = {styles.forgotPasswordText}>
             Quên mật khẩu?
           </Text> */}
-          <MyButton title='Đăng ký' loading={loading} onPress = {onSubmit} />
+          <MyButton
+            title='Đăng ký'
+            loading={loading}
+            onPress={onSubmit}
+            buttonStyle={{ width: wp(70), alignItems: 'center', alignSelf: 'center' }}
+          />
           {/* footer */}
-          <View style = {styles.footer}>
-            <Text style = {styles.footerText}>Đã có tài khoản?</Text>
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Đã có tài khoản?</Text>
             {/* <Pressable onPress = {() => navigation.navigate('Login')}> */}
             <Pressable onPress={() => router.push('/loginScr')}>
-              <Text style = {{color:theme.colors.primary, fontSize: hp(2.5), fontWeight: '500'}}>
+              <Text style={{ color: theme.colors.primary, fontSize: hp(2.5), fontWeight: '500' }}>
                 Đăng nhập!
               </Text>
             </Pressable>
@@ -122,14 +127,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: theme.colors.text,
     marginTop: wp(2),
-  },  
-  forgotPasswordText:{
+  },
+  forgotPasswordText: {
     textAlign: 'right',
     fontSize: hp(2.5),
     fontWeight: '500',
     color: theme.colors.text,
   },
-  footer:{
+  footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',

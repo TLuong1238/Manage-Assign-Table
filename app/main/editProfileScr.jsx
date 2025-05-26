@@ -122,7 +122,7 @@ const EditProfileScr = () => {
         return getUserImageSrc(user.image);
     }, [user.image]);
     return (
-        <ScreenWrapper bg={'white'}>
+        <ScreenWrapper bg={'#FFBF00'}>
             <View style={styles.container}>
                 <ScrollView style={{ flex: 1 }}>
                     <MyHeader title="Edit Profiles" />

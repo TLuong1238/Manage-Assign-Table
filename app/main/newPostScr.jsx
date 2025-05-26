@@ -140,7 +140,7 @@ const NewPostScr = () => {
 
 
   return (
-    <ScreenWrapper bg={'white'}>
+    <ScreenWrapper bg={'#FFBF00'}>
       <View style={styles.container}>
         <Header title={"Đăng bài"} />
         <ScrollView contentContainerStyle={{ gap: 20 }} showsVerticalScrollIndicator={false}>
@@ -233,6 +233,7 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: hp(3),
     fontWeight: 'semibold',
+    color: 'white',
   },
   avatar: {
     height: hp(6.5),
@@ -245,7 +246,7 @@ const styles = StyleSheet.create({
   publicText: {
     fontSize: hp(2),
     fontWeight: '200',
-    color: theme.colors.textLight,
+    color: 'black',
   },
   media: {
     flexDirection: 'row',
@@ -256,7 +257,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     borderRadius: 20,
     borderCurve: "continuous",
-    borderColor: 'gray'
+    borderColor: 'gray',
+    backgroundColor: "white",
   },
   mediaIcon: {
     flexDirection: 'row',

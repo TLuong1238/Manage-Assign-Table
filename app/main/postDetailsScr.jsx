@@ -190,7 +190,8 @@ const PostDetailsScr = () => {
                 contentContainerStyle={styles.list}>
                 {post ? (
                     <MyPostCard
-                        item={{ ...post, 
+                        item={{
+                            ...post,
                             comments: [{ count: post?.comments?.length }],
                         }}
                         currentUser={user}
@@ -229,7 +230,7 @@ const PostDetailsScr = () => {
                     }
                 </View>
                 {/*comment list*/}
-                <View styles={{ marginVertical: hp(2), gap: 17 }}>
+                <View styles={{ marginVertical: hp(2), gap: 17, backgroundColor: 'white' }}>
                     {
                         post?.comments?.map(comment =>
                             <MyCommentItem
@@ -244,7 +245,9 @@ const PostDetailsScr = () => {
 
                     {
                         post?.comments?.length === 0 && (
-                            <View style={{ color: theme.colors.textLight, marginTop: hp(6), alignItems: 'center', justifyContent: 'center' }}>
+                            <View style={{
+                                color: theme.colors.textLight, marginTop: hp(6), alignItems: 'center', justifyContent: 'center',backgroundColor: 'white'
+                            }}>
                                 <Icon.MessageCircle stroke={theme.colors.textLight} height={hp(5)} width={hp(5)} />
                                 <Text style={styles.notFound}>Hãy tạo bình luận đầu tiên!</Text>
                             </View>
@@ -262,7 +265,7 @@ export default PostDetailsScr
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: 'white',
+        backgroundColor: '#FFBF00',
         paddingVertical: wp(7)
     },
     inputContainer: {

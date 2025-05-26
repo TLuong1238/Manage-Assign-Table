@@ -209,8 +209,8 @@ const AssignTableScr = () => {
         userId: user?.id,
         num_people: peopleCount,
         note: note || "",
-        // phone: phone,
-        // name: name,
+        phone: phone,
+        name: name,
         time: time.toISOString(),
         state: "in_order",
         visit: "on_process",
@@ -372,7 +372,7 @@ const AssignTableScr = () => {
                 mode="date"
                 display="default"
                 onChange={handleDateChange}
-                minimumDate={new Date()} // Không cho chọn ngày trước hôm nay
+                minimumDate={new Date()} 
 
               />
             )}
