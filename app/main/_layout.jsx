@@ -31,6 +31,7 @@ export default function MainLayout() {
         screenOptions={{
           headerShown: false,
           animation: 'fade',
+          tabBarActiveTintColor: '#FFBF00',
         }}
       >
         {/* Tab Navigator */}
