@@ -46,7 +46,6 @@ const LoginScr = () => {
   }
   return (
     <ScreenWrapper bg='#FFBF00'>
-      <StatusBar style="dark" />
       <View style={styles.container}>
         <MyBackButton />
         {/* welcomm */}

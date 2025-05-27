@@ -148,7 +148,6 @@ const styles = StyleSheet.create({
     },
     header: {
         alignItems: 'center',
-        marginVertical: hp(2),
     },
     headerSubtitle: {
         fontSize: hp(1.8),

@@ -64,7 +64,7 @@ const PostDetailsScr = () => {
 
         getPostDetails();
         if (commentId && post?.comments) {
-            // Đợi một chút để UI render xong
+            // render time
             setTimeout(() => {
                 if (commentRef.current[commentId]) {
                     commentRef.current[commentId].measure((x, y, width, height, pageX, pageY) => {

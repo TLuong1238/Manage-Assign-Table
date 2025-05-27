@@ -21,9 +21,9 @@ import { createBill, createDetail, fetchBill, fetchBillByTimeRange, fetchDetailB
 
 const AssignTableScr = () => {
   const { user } = useAuth();
-  const [tables, setTables] = useState([]); // Danh sách bàn
-  const [floors, setFloors] = useState([]); // Danh sách tầng
-  const [bills, setBills] = useState([]); // Danh sách hóa đơn
+  const [tables, setTables] = useState([]);
+  const [floors, setFloors] = useState([]); 
+  const [bills, setBills] = useState([]);
 
   const [loading, setLoading] = useState(false);
   //
@@ -73,7 +73,7 @@ const AssignTableScr = () => {
           return;
         }
       } else {
-        // Nếu không phải hôm nay, set ngày của selectedTime = ngày của date
+        // setChooseDate
         selected.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
       }
 
@@ -83,10 +83,10 @@ const AssignTableScr = () => {
 
 
   const updateTablesWithBills = (tables, detailBills) => {
-    // Lấy tất cả tableId đang được đặt
+    // all tables
     const inUseTableIds = detailBills.map(detail => detail.tableId);
 
-    // Cập nhật trạng thái bàn
+    // state
     return tables.map(table =>
       inUseTableIds.includes(table.id)
         ? { ...table, state: 'in_use' }
@@ -102,11 +102,11 @@ const AssignTableScr = () => {
     if (tableRes.success && billRes.success) {
       setBills(billRes.data);
 
-      // Lấy tất cả billId có state === 'in_order'
+      // state = inorder
       const inOrderBills = billRes.data.filter(bill => bill.state === 'in_order');
       const inOrderBillIds = inOrderBills.map(bill => bill.id);
 
-      // Lấy tất cả detailBills có billId thuộc các bill in_order
+      // detail bill inorder
       let detailBills = [];
       if (inOrderBillIds.length > 0) {
         const detailRes = await fetchDetailByBillIds(inOrderBillIds);
@@ -115,11 +115,11 @@ const AssignTableScr = () => {
         }
       }
 
-      // Cập nhật trạng thái bàn dựa trên detailBills
+      // set state
       const updatedTables = updateTablesWithBills(tableRes.data, detailBills);
       setTables(updatedTables);
 
-      // Nhóm bàn theo tầng
+      // group table by floor
       const groupedFloors = updatedTables.reduce((acc, table) => {
         if (!acc[table.floor]) acc[table.floor] = [];
         acc[table.floor].push(table);
@@ -179,7 +179,7 @@ const AssignTableScr = () => {
     }
 
 
-    // Kiểm tra số bàn có đủ cho số người không
+    // require tables
     const requiredTables = Math.ceil(peopleCount / 6);
     if (chooseTable.length < requiredTables) {
       const missingTables = requiredTables - chooseTable.length;
@@ -201,7 +201,7 @@ const AssignTableScr = () => {
       return;
     }
 
-    // Nếu đủ bàn thì tiếp tục đặt bàn
+    //
     setLoading(true);
     console.log('2. Đã set loading = true');
     try {
@@ -225,7 +225,7 @@ const AssignTableScr = () => {
         return;
       }
 
-      // Tạo detail bills
+      // detail bills
       const detailRes = await createDetail(billRes.data[0].id, chooseTable, peopleCount);
       console.log('6. Kết quả createDetail:', detailRes);
       if (!detailRes.success) {
@@ -244,9 +244,8 @@ const AssignTableScr = () => {
     setLoading(false);
   };
 
-  // Hàm tự động chọn bàn
+  // auto select tables
   const autoSelectTables = (missingTables) => {
-    // Lấy danh sách bàn trống
     const availableTables = tables.filter(table =>
       table.state !== 'in_use' && !chooseTable.includes(table.id)
     );
@@ -256,27 +255,27 @@ const AssignTableScr = () => {
       return;
     }
 
-    // Tìm bàn gần nhất với bàn đã chọn (nếu có)
+    // closet
     let selectedTables = [];
     if (chooseTable.length > 0) {
-      // Sắp xếp bàn theo khoảng cách gần nhất với bàn đã chọn
+      // 
       const selectedTable = tables.find(t => t.id === chooseTable[0]);
       const sortedTables = availableTables.sort((a, b) => {
-        // Ưu tiên bàn cùng tầng
+        // 
         if (a.floor === selectedTable.floor && b.floor !== selectedTable.floor) return -1;
         if (b.floor === selectedTable.floor && a.floor !== selectedTable.floor) return 1;
 
-        // Sau đó sắp xếp theo id gần nhất
+        // 
         return Math.abs(a.id - selectedTable.id) - Math.abs(b.id - selectedTable.id);
       });
 
       selectedTables = sortedTables.slice(0, missingTables).map(t => t.id);
     } else {
-      // Nếu chưa chọn bàn nào thì chọn bàn đầu tiên
+      // auto select first 
       selectedTables = availableTables.slice(0, missingTables).map(t => t.id);
     }
 
-    // Cập nhật danh sách bàn đã chọn
+    // 
     setChooseTable([...chooseTable, ...selectedTables]);
     setState(`Hệ thống đã tự động chọn thêm ${missingTables} bàn!`);
   };
@@ -286,16 +285,16 @@ const AssignTableScr = () => {
     console.log('item:', item);
     if (item.state === 'in_use') return;
 
-    // Tính số bàn tối đa được chọn dựa trên số người
+    // max table
     const maxTable = Math.ceil(peopleCount / 6) || 1;
 
-    // Kiểm tra bàn đã được chọn chưa
+    // check select
     const isSelected = chooseTable.includes(item.id);
 
     let newChooseTable = [...chooseTable];
 
     if (isSelected) {
-      // Nếu đã chọn rồi thì bỏ chọn
+      // remove choose
       newChooseTable = newChooseTable.filter(id => id !== item.id);
       setChooseTable(newChooseTable);
       setState('');
@@ -316,7 +315,7 @@ const AssignTableScr = () => {
       <View style={styles.container}>
         <MyHeader title="Đặt bàn" showBackButton={true} />
         <View style={{ backgroundColor: '#fff7bf', borderRadius: 10, }}>
-          {/* Form nhập thông tin + Danh sách bàn */}
+          {/* view all */}
           <View style={{ gap: 10, padding: 15 }}>
             <Text style={{ color: 'black', fontSize: 20, paddingHorizontal: wp(2) }}>Vui lòng điền thông tin của bạn:</Text>
             <MyInput
@@ -393,7 +392,7 @@ const AssignTableScr = () => {
               onChangeText={setNote}
             />
           </View>
-          {/* Danh sách bàn */}
+          {/* table list */}
           <ScrollView
             horizontal
             pagingEnabled

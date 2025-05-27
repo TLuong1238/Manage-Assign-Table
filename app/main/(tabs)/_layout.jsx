@@ -46,7 +46,7 @@ export default function TabsLayout() {
         }}
       />
 
-      {/* Tab Thông báo */}
+      {/* notifi */}
       <Tabs.Screen
         name="notificationScr"
         options={{
@@ -56,7 +56,7 @@ export default function TabsLayout() {
           ),
         }}
       />
-      {/* Tab lịch sử */}
+      {/* history */}
       <Tabs.Screen
         name="historyScr"
         options={{
@@ -66,7 +66,7 @@ export default function TabsLayout() {
           ),
         }}
       />
-      {/* Tab Hồ sơ */}
+      {/* profile */}
       <Tabs.Screen
         name="profileScr"
         options={{

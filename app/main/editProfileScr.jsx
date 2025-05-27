@@ -113,12 +113,12 @@ const EditProfileScr = () => {
             return require('../../assets/images/defaultUser.png');
         }
 
-        // Nếu image là URI local (sau khi chọn ảnh mới)
+        // local url
         if (user.image.startsWith('file://') || user.image.startsWith('content://')) {
             return { uri: user.image };
         }
 
-        // Nếu image là path từ Supabase
+        // path
         return getUserImageSrc(user.image);
     }, [user.image]);
     return (

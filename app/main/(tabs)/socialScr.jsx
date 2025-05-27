@@ -104,7 +104,6 @@ const SocialScr = () => {
 
         />
       </View>
-      {/* <Button title='Đăng xuât' onPress={onLogout} /> */}
     </ScreenWrapper>
   )
 }

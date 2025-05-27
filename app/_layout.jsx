@@ -3,7 +3,7 @@ import { AuthProvider, useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { Stack, useRouter } from 'expo-router'
 import { getUserData } from '../services/userService'
-import { LogBox, View } from 'react-native'
+import { LogBox, StatusBar, View } from 'react-native'
 import MyLoading from '../components/MyLoading'
 // Bỏ qua một số warnings không cần thiết
 LogBox.ignoreLogs([
@@ -24,14 +24,14 @@ const MainLayout = () => {
   const { user, setAuth, setUserData, setLoading, isLoading } = useAuth();
   const router = useRouter();
 
-  // Kiểm tra session hiện tại khi ứng dụng khởi động
+  // 
   useEffect(() => {
     const checkSession = async () => {
       setLoading(true);
       try {
         const { data } = await supabase.auth.getSession();
         console.log("Initial session check:", data?.session ? "Session found" : "No session");
-        
+
         if (data?.session) {
           setAuth(data.session.user);
           await updateUserData(data.session.user, data.session.user?.email);
@@ -47,13 +47,13 @@ const MainLayout = () => {
         setLoading(false);
       }
     };
-    
+
     checkSession();
-    
-    // Theo dõi thay đổi trong trạng thái xác thực
+
+    // check session
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       console.log("Auth state changed:", _event);
-      
+
       if (session) {
         setAuth(session?.user);
         updateUserData(session?.user, session?.user?.email);
@@ -63,7 +63,7 @@ const MainLayout = () => {
         router.replace('/welcomeScr');
       }
     });
-    
+
     return () => {
       data?.subscription?.unsubscribe();
     };
@@ -77,25 +77,29 @@ const MainLayout = () => {
     }
   }
 
-  // Hiển thị loading khi đang kiểm tra xác thực
+  // 
   if (isLoading) {
     return (
-      <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <MyLoading />
       </View>
     );
   }
 
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        animation: 'fade',
-      }}
-    >
-      <Stack.Screen name="main" />
-      <Stack.Screen name="welcomeScr" />
-    </Stack>
+    <>
+      <StatusBar style="dark" backgroundColor="#FFBF00" />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: 'fade',
+          tabBarActiveTintColor: '#FFBF00',
+        }}
+      >
+        <Stack.Screen name="main" />
+        <Stack.Screen name="welcomeScr" />
+      </Stack>
+    </>
   )
 }
 

@@ -9,7 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 export default function MainLayout() {
   const { user, isLoading } = useAuth();
 
-  // Bảo vệ route - chỉ cho phép truy cập khi đã đăng nhập
+  // 
   if (isLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -18,14 +18,14 @@ export default function MainLayout() {
     );
   }
 
-  // Chuyển hướng về trang đăng nhập nếu chưa xác thực
+  // not user
   if (!user) {
     return <Redirect href="/welcomeScr" />;
   }
 
   return (
     <>
-      <StatusBar style="auto" />
+      <StatusBar style="dark" backgroundColor="#FFBF00" />
       {/* Stack Navigator */}
       <Stack
         screenOptions={{
@@ -42,7 +42,7 @@ export default function MainLayout() {
           }}
         />
 
-        {/* Các màn hình modal */}
+        {/* Scree */}
         <Stack.Screen
           name="postDetailsScr"
         />
@@ -54,6 +54,7 @@ export default function MainLayout() {
         <Stack.Screen
           name="editProfileScr"
         />
+
       </Stack>
     </>
   );

@@ -72,7 +72,7 @@ const NewPostScr = () => {
   }
   const isBodyEmpty = (body) => {
     if (!body) return true;
-    // Loại bỏ thẻ HTML, &nbsp;, ký tự xuống dòng, khoảng trắng
+    //remove html
     const text = body.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, '').replace(/\s/g, '');
     return text.length === 0;
   };
