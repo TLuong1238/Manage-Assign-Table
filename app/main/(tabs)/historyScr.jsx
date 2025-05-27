@@ -76,14 +76,14 @@ const HistoryScr = () => {
           onPress: async () => {
             setLoading(true);
             try {
-              // Cập nhật bill
+              // update bill
               const updateRes = await updateBill(bill.id, {
                 state: 'cancelled',
                 visit: 'un_visitted'
               });
 
               if (updateRes.success) {
-                // Cập nhật state của các bàn thành empty
+                // update table state to empty
                 if (bill.details && bill.details.length > 0) {
                   const tableIds = [...new Set(bill.details.map(detail => detail.tableId))];
 
@@ -108,7 +108,7 @@ const HistoryScr = () => {
   };
 
   const handleArrived = async (bill) => {
-    
+
     Alert.alert(
       "Xác nhận đã đến",
       "Xác nhận bạn đã đến nhà hàng?",
@@ -127,18 +127,16 @@ const HistoryScr = () => {
               if (updateRes.success) {
                 Alert.alert("Thành công", "Chúc bạn có bữa ăn ngon miệng!");
 
-                // Đặt timer để tự động giải phóng bàn sau 1 giờ
+                // time out after 1 hour 
                 setTimeout(async () => {
                   try {
                     if (bill.details && bill.details.length > 0) {
                       const tableIds = [...new Set(bill.details.map(detail => detail.tableId))];
 
-                      // Cập nhật state của các bàn thành empty sau 1 giờ
                       for (const tableId of tableIds) {
                         await updateTableState(tableId, 'empty');
                       }
 
-                      // Cập nhật bill để đánh dấu đã hoàn thành việc giải phóng bàn
                       await updateBill(bill.id, {
                         state: 'completed',
                       });
@@ -148,9 +146,9 @@ const HistoryScr = () => {
                   } catch (error) {
                     console.log('Lỗi khi giải phóng bàn sau 1 giờ:', error);
                   }
-                }, 60 * 60 * 1000); // 1 giờ = 60 * 60 * 1000 ms
+                }, 60 * 60 * 1000);
 
-                fetchUserBills(); // Refresh data ngay lập tức
+                fetchUserBills();
               } else {
                 Alert.alert("Lỗi", updateRes.msg || "Không thể cập nhật trạng thái");
               }
@@ -184,158 +182,156 @@ const HistoryScr = () => {
 
 
   const renderBillItem = ({ item, index }) => {
-  // Kiểm tra thời gian để hiển thị nút
-  const checkCanArrive = () => {
-    const now = new Date();
-    const bookingTime = new Date(item.time);
-    const timeDiff = bookingTime.getTime() - now.getTime();
-    const minutesDiff = timeDiff / (1000 * 60); // Chuyển đổi sang phút
-    
-    // Cho phép bấm nút khi còn 10 phút hoặc đã quá giờ đặt
-    return minutesDiff <= 10;
-  };
+    const checkCanArrive = () => {
+      const now = new Date();
+      const bookingTime = new Date(item.time);
+      const timeDiff = bookingTime.getTime() - now.getTime();
+      const minutesDiff = timeDiff / (1000 * 60);
 
-  const getTimeStatus = () => {
-    const now = new Date();
-    const bookingTime = new Date(item.time);
-    const timeDiff = bookingTime.getTime() - now.getTime();
-    const minutesDiff = timeDiff / (1000 * 60);
-    
-    if (minutesDiff > 10) {
-      const hours = Math.floor(minutesDiff / 60);
-      const minutes = Math.floor(minutesDiff % 60);
-      return `Còn ${hours > 0 ? `${hours}h ` : ''}${minutes}p mới đến giờ`;
-    } else if (minutesDiff > 0) {
-      return `Còn ${Math.floor(minutesDiff)}p nữa`;
-    } else {
-      return "Đã đến giờ";
-    }
-  };
+      //allow ten minutes
+      return minutesDiff <= 10;
+    };
 
-  const canArrive = checkCanArrive();
+    const getTimeStatus = () => {
+      const now = new Date();
+      const bookingTime = new Date(item.time);
+      const timeDiff = bookingTime.getTime() - now.getTime();
+      const minutesDiff = timeDiff / (1000 * 60);
+
+      if (minutesDiff > 10) {
+        const hours = Math.floor(minutesDiff / 60);
+        const minutes = Math.floor(minutesDiff % 60);
+        return `Còn ${hours > 0 ? `${hours}h ` : ''}${minutes}p mới đến giờ`;
+      } else if (minutesDiff > 0) {
+        return `Còn ${Math.floor(minutesDiff)}p nữa`;
+      } else {
+        return "Đã đến giờ";
+      }
+    };
+
+    const canArrive = checkCanArrive();
+
+    return (
+      <View style={styles.billCard}>
+        <View style={styles.billHeader}>
+          <Text style={styles.billId}>Đơn #{bills.length - index}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.state) }]}>
+            <Text style={styles.statusText}>{getStatusText(item.state)}</Text>
+          </View>
+        </View>
+
+        <View style={styles.billInfo}>
+          <View style={styles.infoRow}>
+            <Icon.User width={16} height={16} color={theme.colors.textLight} />
+            <Text style={styles.infoText}>{item.name}</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Icon.Phone width={16} height={16} color={theme.colors.textLight} />
+            <Text style={styles.infoText}>{item.phone}</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Icon.Users width={16} height={16} color={theme.colors.textLight} />
+            <Text style={styles.infoText}>{item.num_people} người</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Icon.Clock width={16} height={16} color={theme.colors.textLight} />
+            <Text style={styles.infoText}>
+              {new Date(item.time).toLocaleString('vi-VN')}
+            </Text>
+          </View>
+
+          {/* time for inorder */}
+          {item.state === 'in_order' && (
+            <View style={styles.infoRow}>
+              <Icon.Info width={16} height={16} color={canArrive ? 'green' : 'orange'} />
+              <Text style={[styles.infoText, { color: canArrive ? 'green' : 'orange' }]}>
+                {getTimeStatus()}
+              </Text>
+            </View>
+          )}
+
+          {item.note && (
+            <View style={styles.infoRow}>
+              <Icon.FileText width={16} height={16} color={theme.colors.textLight} />
+              <Text style={styles.infoText}>{item.note}</Text>
+            </View>
+          )}
+        </View>
+
+        {item.details && item.details.length > 0 && (
+          <View style={styles.tablesSection}>
+            <Text style={styles.tablesTitle}>Bàn đã đặt:</Text>
+            <View style={styles.tablesContainer}>
+              {[...new Set(item.details.map(detail => detail.tableId))].map(tableId => (
+                <View key={tableId} style={styles.tableChip}>
+                  <Text style={styles.tableText}>{getTableName(tableId)}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* action button */}
+        {item.state === 'in_order' && (
+          <View style={styles.actionSection}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.cancelButton]}
+              onPress={() => handleCancelBill(item)}
+            >
+              <Icon.X width={16} height={16} color="white" />
+              <Text style={styles.actionButtonText}>Hủy đơn</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                canArrive ? styles.arrivedButton : styles.disabledButton
+              ]}
+              onPress={canArrive ? () => handleArrived(item) : null}
+              disabled={!canArrive}
+            >
+              <Icon.Check width={16} height={16} color="white" />
+              <Text style={styles.actionButtonText}>
+                {canArrive ? "Đã đến" : "Chưa đến giờ"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    );
+  };
 
   return (
-    <View style={styles.billCard}>
-      <View style={styles.billHeader}>
-        <Text style={styles.billId}>Đơn #{bills.length - index}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.state) }]}>
-          <Text style={styles.statusText}>{getStatusText(item.state)}</Text>
-        </View>
-      </View>
+    <ScreenWrapper bg="#FFBF00">
+      <View style={styles.container}>
+        <MyHeader title="Lịch sử đặt bàn" showBackButton={false} />
 
-      <View style={styles.billInfo}>
-        <View style={styles.infoRow}>
-          <Icon.User width={16} height={16} color={theme.colors.textLight} />
-          <Text style={styles.infoText}>{item.name}</Text>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Icon.Phone width={16} height={16} color={theme.colors.textLight} />
-          <Text style={styles.infoText}>{item.phone}</Text>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Icon.Users width={16} height={16} color={theme.colors.textLight} />
-          <Text style={styles.infoText}>{item.num_people} người</Text>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Icon.Clock width={16} height={16} color={theme.colors.textLight} />
-          <Text style={styles.infoText}>
-            {new Date(item.time).toLocaleString('vi-VN')}
-          </Text>
-        </View>
-
-        {/* Hiển thị trạng thái thời gian cho đơn in_order */}
-        {item.state === 'in_order' && (
-          <View style={styles.infoRow}>
-            <Icon.Info width={16} height={16} color={canArrive ? 'green' : 'orange'} />
-            <Text style={[styles.infoText, { color: canArrive ? 'green' : 'orange' }]}>
-              {getTimeStatus()}
-            </Text>
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <Text>Đang tải...</Text>
           </View>
-        )}
-
-        {item.note && (
-          <View style={styles.infoRow}>
-            <Icon.FileText width={16} height={16} color={theme.colors.textLight} />
-            <Text style={styles.infoText}>{item.note}</Text>
+        ) : bills.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Icon.Calendar width={50} height={50} color={theme.colors.textLight} />
+            <Text style={styles.emptyText}>Bạn chưa có đơn đặt bàn nào</Text>
           </View>
+        ) : (
+          <FlatList
+            data={bills}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={renderBillItem}
+            contentContainerStyle={styles.listContainer}
+            showsVerticalScrollIndicator={false}
+            refreshing={loading}
+            onRefresh={fetchUserBills}
+          />
         )}
       </View>
-
-      {/* Danh sách bàn đã đặt */}
-      {item.details && item.details.length > 0 && (
-        <View style={styles.tablesSection}>
-          <Text style={styles.tablesTitle}>Bàn đã đặt:</Text>
-          <View style={styles.tablesContainer}>
-            {[...new Set(item.details.map(detail => detail.tableId))].map(tableId => (
-              <View key={tableId} style={styles.tableChip}>
-                <Text style={styles.tableText}>{getTableName(tableId)}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      )}
-
-      {/* Nút hành động cho đơn in_order */}
-      {item.state === 'in_order' && (
-        <View style={styles.actionSection}>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.cancelButton]}
-            onPress={() => handleCancelBill(item)}
-          >
-            <Icon.X width={16} height={16} color="white" />
-            <Text style={styles.actionButtonText}>Hủy đơn</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.actionButton, 
-              canArrive ? styles.arrivedButton : styles.disabledButton
-            ]}
-            onPress={canArrive ? () => handleArrived(item) : null}
-            disabled={!canArrive}
-          >
-            <Icon.Check width={16} height={16} color="white" />
-            <Text style={styles.actionButtonText}>
-              {canArrive ? "Đã đến" : "Chưa đến giờ"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
+    </ScreenWrapper>
   );
-};
-
-return (
-  <ScreenWrapper bg="#FFBF00">
-    <View style={styles.container}>
-      <MyHeader title="Lịch sử đặt bàn" showBackButton={false} />
-
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <Text>Đang tải...</Text>
-        </View>
-      ) : bills.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Icon.Calendar width={50} height={50} color={theme.colors.textLight} />
-          <Text style={styles.emptyText}>Bạn chưa có đơn đặt bàn nào</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={bills}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderBillItem}
-          contentContainerStyle={styles.listContainer}
-          showsVerticalScrollIndicator={false}
-          refreshing={loading}
-          onRefresh={fetchUserBills}
-        />
-      )}
-    </View>
-  </ScreenWrapper>
-);
 };
 
 export default HistoryScr;
@@ -469,6 +465,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   disabledButton: {
-    backgroundColor: '#95a5a6', 
+    backgroundColor: '#95a5a6',
   },
 });

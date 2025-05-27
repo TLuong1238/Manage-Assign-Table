@@ -91,7 +91,7 @@ const index = () => {
 
                     <View style={{ alignItems: 'center', justifyContent: 'center', marginTop: 15 }}>
                         <MyButton
-                            onPress={() => router.push('/main/assignTableScr')}
+                            onPress={() => router.push('../main/locationScr')}
                             buttonStyle={{ width: wp(20), height: wp(20) }}
                             icon={<Fontisto name="map" size={40} color="black" />}
                         />

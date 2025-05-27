@@ -13,7 +13,7 @@ import MyLoading from '../../../components/MyLoading'
 import { getUserData } from '../../../services/userService'
 import MyPostCard from '../../../components/MyPostCard'
 import usePostRt from '../../../hook/usePostRt'
-const HomeScr = () => {
+const SocialScr = () => {
 
   const { user } = useAuth();
   const router = useRouter();
@@ -76,6 +76,8 @@ const HomeScr = () => {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listStyle}
           keyExtractor={item => item.id.toString()}
+          refreshing={loading}
+          onRefresh={getPosts}
           renderItem={({ item }) => <MyPostCard
             item={item}
             currentUser={user}
@@ -107,7 +109,7 @@ const HomeScr = () => {
   )
 }
 
-export default HomeScr
+export default SocialScr
 
 const styles = StyleSheet.create({
   container: {

@@ -48,115 +48,215 @@ export default function usePostRt(user, limit = 10, own = false) {
         } finally {
             setLoading(false);
         }
-    }, [loading, hasMore, posts.length]);
+    }, [loading, hasMore, posts.length, limit, own, user?.id]);
 
     // Xử lý sự kiện realtime với memoization
     const handlePostEvent = useCallback(async (payload) => {
         const { eventType, new: newData, old: oldData } = payload;
-        console.log(`Received ${eventType} event:`, payload);
+        console.log(`[POSTS] Received ${eventType} event:`, payload);
 
         try {
             switch (eventType) {
                 case 'INSERT':
                     if (newData?.id) {
+                        // Kiểm tra xem post đã tồn tại chưa
+                        if (postsMapRef.current.has(newData.id)) {
+                            console.log(`[POSTS] Post ${newData.id} already exists, skipping`);
+                            return;
+                        }
+
                         // Lấy thông tin user và tạo cấu trúc post đầy đủ
                         const res = await getUserData(newData.userId);
                         const newPost = {
                             ...newData,
-                            likes: [],
-                            comments: [{ count: 0 }],
+                            likes: [], // Đảm bảo likes là array
+                            comments: [{ count: 0 }], // Đảm bảo comments có structure đúng
                             user: res.success ? res.data : {}
                         };
 
-                        // Thêm vào Map và cập nhật state
+                        // Thêm vào Map
                         postsMapRef.current.set(newPost.id, newPost);
+
+                        // Cập nhật state - thêm vào đầu danh sách
                         setPosts(prevPosts => {
-                            // Nếu đã có post này thì không thêm nữa
-                            if (prevPosts.some(p => p.id === newPost.id)) return prevPosts;
+                            // Double check để tránh duplicate
+                            if (prevPosts.some(p => p.id === newPost.id)) {
+                                console.log(`[POSTS] Post ${newPost.id} already in state`);
+                                return prevPosts;
+                            }
+                            console.log(`[POSTS] Added new post ${newPost.id} to state`);
                             return [newPost, ...prevPosts];
                         });
                     }
                     break;
 
                 case 'UPDATE':
-                    if (newData?.id && postsMapRef.current.has(newData.id)) {
-                        // Lấy post hiện tại và cập nhật thông tin
-                        const currentPost = postsMapRef.current.get(newData.id);
-                        const updatedPost = {
-                            ...currentPost,
-                            body: newData.body,
-                            file: newData.file,
-                            updated_at: newData.updated_at,
-                            created_at: newData.created_at
-                        };
+                    if (newData?.id) {
+                        if (postsMapRef.current.has(newData.id)) {
+                            // Lấy post hiện tại từ Map
+                            const currentPost = postsMapRef.current.get(newData.id);
 
-                        // Cập nhật Map và state
-                        postsMapRef.current.set(updatedPost.id, updatedPost);
-                        setPosts(prevPosts =>
-                            prevPosts.map(post => post.id === updatedPost.id ? updatedPost : post)
-                        );
+                            // Tạo post đã cập nhật, giữ nguyên likes và comments
+                            const updatedPost = {
+                                ...currentPost, // Giữ nguyên likes, comments, user
+                                ...newData, // Cập nhật các field mới
+                                likes: currentPost.likes, // Đảm bảo không mất likes
+                                comments: currentPost.comments, // Đảm bảo không mất comments
+                                user: currentPost.user // Đảm bảo không mất user info
+                            };
+
+                            // Cập nhật Map
+                            postsMapRef.current.set(updatedPost.id, updatedPost);
+
+                            // Cập nhật state
+                            setPosts(prevPosts =>
+                                prevPosts.map(post =>
+                                    post.id === updatedPost.id ? updatedPost : post
+                                )
+                            );
+
+                            console.log(`[POSTS] Updated post ${updatedPost.id}`);
+                        } else {
+                            console.log(`[POSTS] Post ${newData.id} not found in Map for update`);
+                        }
                     }
                     break;
 
                 case 'DELETE':
-                    if (oldData?.id && postsMapRef.current.has(oldData.id)) {
-                        // Xóa khỏi Map và cập nhật state
-                        postsMapRef.current.delete(oldData.id);
-                        setPosts(prevPosts => prevPosts.filter(post => post.id !== oldData.id));
+                    if (oldData?.id) {
+                        // Kiểm tra post có tồn tại không
+                        if (postsMapRef.current.has(oldData.id)) {
+                            // Xóa khỏi Map
+                            postsMapRef.current.delete(oldData.id);
+
+                            // Xóa khỏi state
+                            setPosts(prevPosts => {
+                                const filteredPosts = prevPosts.filter(post => post.id !== oldData.id);
+                                console.log(`[POSTS] Deleted post ${oldData.id} from state`);
+                                return filteredPosts;
+                            });
+                        } else {
+                            console.log(`[POSTS] Post ${oldData.id} not found in Map for deletion`);
+                        }
                     }
+                    break;
+
+                default:
+                    console.log(`[POSTS] Unknown event type: ${eventType}`);
                     break;
             }
         } catch (error) {
-            console.error(`Error handling ${eventType} event:`, error);
+            console.error(`[POSTS] Error handling ${eventType} event:`, error);
         }
     }, []);
 
     // Thiết lập kênh comments riêng biệt
     const handleCommentEvent = useCallback(async (payload) => {
-        if (payload?.eventType === 'INSERT' && payload?.new?.postId) {
-            const postId = payload.new.postId;
+        const { eventType, new: newData, old: oldData } = payload;
+        console.log(`[COMMENTS] Received ${eventType} event:`, payload);
 
-            if (postsMapRef.current.has(postId)) {
-                const post = postsMapRef.current.get(postId);
+        try {
+            switch (eventType) {
+                case 'INSERT':
+                    if (newData?.postId) {
+                        const postId = newData.postId;
 
-                // Tạo bản sao và cập nhật số lượng comments
-                const updatedPost = { ...post };
-                if (updatedPost.comments?.[0]?.count !== undefined) {
-                    updatedPost.comments = [{ count: updatedPost.comments[0].count + 1 }];
-                } else {
-                    updatedPost.comments = [{ count: 1 }];
-                }
+                        if (postsMapRef.current.has(postId)) {
+                            const post = postsMapRef.current.get(postId);
 
-                // Cập nhật Map và state
-                postsMapRef.current.set(postId, updatedPost);
-                setPosts(prevPosts =>
-                    prevPosts.map(p => p.id === postId ? updatedPost : p)
-                );
+                            // Tạo bản sao và tăng số lượng comments
+                            const updatedPost = { ...post };
+
+                            if (updatedPost.comments?.[0]?.count !== undefined) {
+                                updatedPost.comments = [{ count: updatedPost.comments[0].count + 1 }];
+                            } else {
+                                updatedPost.comments = [{ count: 1 }];
+                            }
+
+                            // Cập nhật Map và state
+                            postsMapRef.current.set(postId, updatedPost);
+                            setPosts(prevPosts =>
+                                prevPosts.map(p => p.id === postId ? updatedPost : p)
+                            );
+
+                            console.log(`[COMMENTS] Increased comment count for post ${postId} to:`,
+                                updatedPost.comments[0].count);
+                        } else {
+                            console.log(`[COMMENTS] Post ${postId} not found for comment INSERT`);
+                        }
+                    }
+                    break;
+
+                case 'UPDATE':
+                    if (newData?.postId) {
+                        const postId = newData.postId;
+
+                        if (postsMapRef.current.has(postId)) {
+                            const post = postsMapRef.current.get(postId);
+
+                            // Tạo bản sao - UPDATE thường không thay đổi số lượng
+                            const updatedPost = { ...post };
+
+                            // Cập nhật Map và state
+                            postsMapRef.current.set(postId, updatedPost);
+                            setPosts(prevPosts =>
+                                prevPosts.map(p => p.id === postId ? updatedPost : p)
+                            );
+
+                            console.log(`[COMMENTS] Updated comment for post ${postId}`);
+                        } else {
+                            console.log(`[COMMENTS] Post ${newData.postId} not found for comment UPDATE`);
+                        }
+                    }
+                    break;
+
+                case 'DELETE':
+                    let postId = null;
+                    const commentId = oldData?.id;
+
+                    // Tìm postId từ payload hoặc từ data cũ
+                    if (oldData?.postId) {
+                        postId = oldData.postId;
+                    } else {
+                        console.log(`[COMMENTS] No postId in DELETE payload for comment ${commentId}`);
+                        // Không thể tìm postId từ Map vì comments không được lưu trong posts
+                        // Cần phải có postId trong payload.old
+                        return;
+                    }
+
+                    if (postId && postsMapRef.current.has(postId)) {
+                        const post = postsMapRef.current.get(postId);
+
+                        // Tạo bản sao và giảm số lượng comments
+                        const updatedPost = { ...post };
+
+                        if (updatedPost.comments?.[0]?.count !== undefined && updatedPost.comments[0].count > 0) {
+                            updatedPost.comments = [{ count: updatedPost.comments[0].count - 1 }];
+                        } else {
+                            // Đảm bảo không bị số âm
+                            updatedPost.comments = [{ count: 0 }];
+                        }
+
+                        // Cập nhật Map và state
+                        postsMapRef.current.set(postId, updatedPost);
+                        setPosts(prevPosts =>
+                            prevPosts.map(p => p.id === postId ? updatedPost : p)
+                        );
+
+                        console.log(`[COMMENTS] Decreased comment count for post ${postId} to:`,
+                            updatedPost.comments[0].count);
+                    } else {
+                        console.log(`[COMMENTS] Post ${postId} not found for comment DELETE`);
+                    }
+                    break;
+
+                default:
+                    console.log(`[COMMENTS] Unknown event type: ${eventType}`);
+                    break;
             }
-        } else if (payload?.eventType === 'DELETE' && payload?.old?.postId) {
-            // Xử lý khi xóa comment
-            const postId = payload.old.postId;
-
-            if (postsMapRef.current.has(postId)) {
-                const post = postsMapRef.current.get(postId);
-
-                // Tạo bản sao và giảm số lượng comments
-                const updatedPost = { ...post };
-                if (updatedPost.comments?.[0]?.count !== undefined && updatedPost.comments[0].count > 0) {
-                    updatedPost.comments = [{ count: updatedPost.comments[0].count - 1 }];
-                }
-
-                // Cập nhật Map và state
-                postsMapRef.current.set(postId, updatedPost);
-                setPosts(prevPosts =>
-                    prevPosts.map(p => p.id === postId ? updatedPost : p)
-                );
-
-                console.log(`[COMMENTS] Decreased comment count for post ${postId}:`,
-                    updatedPost.comments?.[0]?.count);
-            }
+        } catch (error) {
+            console.error(`[COMMENTS] Error handling ${eventType} event:`, error);
         }
-
     }, []);
 
     // Xử lý thông báo mới
@@ -173,18 +273,30 @@ export default function usePostRt(user, limit = 10, own = false) {
     // Xử lý sự kiện like
     const handleLikeEvent = useCallback(async (payload) => {
         console.log(`[LIKES] Received ${payload.eventType} event:`, payload);
+
         if (payload?.eventType === 'INSERT' && payload?.new?.postId) {
             const postId = payload.new.postId;
 
             if (postsMapRef.current.has(postId)) {
                 const post = postsMapRef.current.get(postId);
 
-                // Tạo bản sao và cập nhật số lượng comments
+                // Tạo bản sao và thêm like mới
                 const updatedPost = { ...post };
-                if (updatedPost.likes?.[0]?.count !== undefined) {
-                    updatedPost.likes = [{ count: updatedPost.likes[0].count + 1 }];
+
+                // Đảm bảo likes là array và thêm like mới
+                if (Array.isArray(updatedPost.likes)) {
+                    // Kiểm tra like đã tồn tại chưa
+                    const existingLike = updatedPost.likes.find(like => like.id === payload.new.id);
+                    if (!existingLike) {
+                        updatedPost.likes = [...updatedPost.likes, payload.new];
+                        console.log(`[LIKES] Added like ${payload.new.id} to post ${postId}`);
+                    } else {
+                        console.log(`[LIKES] Like ${payload.new.id} already exists for post ${postId}`);
+                        return;
+                    }
                 } else {
-                    updatedPost.likes = [{ count: 1 }];
+                    updatedPost.likes = [payload.new];
+                    console.log(`[LIKES] Initialized likes array for post ${postId}`);
                 }
 
                 // Cập nhật Map và state
@@ -192,36 +304,42 @@ export default function usePostRt(user, limit = 10, own = false) {
                 setPosts(prevPosts =>
                     prevPosts.map(p => p.id === postId ? updatedPost : p)
                 );
-                console.log(`[LIKES] Increased comment count for post ${postId}:`,
-                    updatedPost.likes?.[0]?.count);
-            }
-        } else if (payload?.eventType === 'DELETE') {
-            let postId = null;
-            const likeId = payload.old.id;
-
-            // Phương án 1: Lấy postId từ payload.old nếu có
-            if (payload.old?.postId) {
-                postId = payload.old.postId;
             } else {
-                // Duyệt qua tất cả posts để tìm like cần xóa
+                console.log(`[LIKES] Post ${postId} not found for like INSERT`);
+            }
+
+        } else if (payload?.eventType === 'DELETE') {
+            const likeId = payload.old?.id;
+            let postId = payload.old?.postId;
+
+            // Nếu không có postId trong payload, tìm trong Map
+            if (!postId) {
                 postsMapRef.current.forEach((post, key) => {
                     const hasLike = post.likes?.some(like => like.id === likeId);
                     if (hasLike) {
                         postId = key;
-                        console.log(`[LIKES] Found postId ${postId} by scanning Map`);
+                        console.log(`[LIKES] Found postId ${postId} by scanning Map for like ${likeId}`);
                     }
                 });
             }
 
-            // Nếu tìm được postId, cập nhật post
+            // Nếu tìm được postId, xóa like
             if (postId && postsMapRef.current.has(postId)) {
-
                 const post = postsMapRef.current.get(postId);
 
-                // Tạo bản sao và giảm số lượng comments
+                // Tạo bản sao và xóa like
                 const updatedPost = { ...post };
-                if (updatedPost.likes?.[0]?.count !== undefined && updatedPost.likes[0].count > 0) {
-                    updatedPost.likes = [{ count: updatedPost.likes[0].count - 1 }];
+
+                if (Array.isArray(updatedPost.likes)) {
+                    const beforeCount = updatedPost.likes.length;
+                    updatedPost.likes = updatedPost.likes.filter(like => like.id !== likeId);
+                    const afterCount = updatedPost.likes.length;
+
+                    if (beforeCount > afterCount) {
+                        console.log(`[LIKES] Removed like ${likeId} from post ${postId}`);
+                    } else {
+                        console.log(`[LIKES] Like ${likeId} not found in post ${postId} likes array`);
+                    }
                 }
 
                 // Cập nhật Map và state
@@ -229,14 +347,10 @@ export default function usePostRt(user, limit = 10, own = false) {
                 setPosts(prevPosts =>
                     prevPosts.map(p => p.id === postId ? updatedPost : p)
                 );
-
-                console.log(`[Like] Decreased like count for post ${postId}:`,
-                    updatedPost.comments?.[0]?.count);
             } else {
-                console.log(`[LIKES] Could not find postId for like ${likeId}`);
+                console.log(`[LIKES] Could not find post for like ${likeId} deletion`);
             }
         }
-
     }, []);
 
 
@@ -299,7 +413,7 @@ export default function usePostRt(user, limit = 10, own = false) {
             supabase.removeChannel(notificationsChannel);
             supabase.removeChannel(likesChannel);
         };
-    }, [user?.id, own]);
+    }, [user?.id, own, handlePostEvent, handleCommentEvent, handleNewNotification, handleLikeEvent]);
 
     return {
         posts,

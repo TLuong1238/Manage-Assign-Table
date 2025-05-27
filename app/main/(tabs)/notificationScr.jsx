@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import MyNotifiItem from '../../../components/MyNotifiItem';
 import MyHeader from '../../../components/MyHeader';
 import useNotiRt from '../../../hook/useNotiRt';
+import MyLoading from '../../../components/MyLoading';
 const NotificationScr = () => {
 
   const { user } = useAuth();
