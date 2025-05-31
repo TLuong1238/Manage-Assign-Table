@@ -48,9 +48,9 @@ export default function TabsLayout() {
 
       {/* notifi */}
       <Tabs.Screen
-        name="notificationScr"
+        name="reportScr"
         options={{
-          title: 'Thông báo',
+          title: 'Báo cáo',
           tabBarIcon: ({ color }) => (
             <Ionicons name="notifications-outline" size={24} color={color} />
           ),
@@ -58,9 +58,9 @@ export default function TabsLayout() {
       />
       {/* history */}
       <Tabs.Screen
-        name="historyScr"
+        name="manageTableScr"
         options={{
-          title: 'Lịch sử',
+          title: 'quản lý đặt bàn',
           tabBarIcon: ({ color }) => (
             <MaterialIcons name="history" size={24} color={color} />
           ),
