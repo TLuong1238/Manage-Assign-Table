@@ -12,7 +12,6 @@ import { supabase } from '../lib/supabase'
 import { useRouter } from 'expo-router'
 
 const LoginScr = () => {
-  const navigation = useNavigation();
   const router = useRouter();
 
   const emailRef = useRef(null);
@@ -28,22 +27,36 @@ const LoginScr = () => {
     let email = emailRef.current.trim();
     let password = passwordRef.current.trim();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
+
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password
     });
+
     setLoading(false);
 
-    console.log('Lỗi', error);
+    if (data.user) {
+      const roleCheck = await checkAdminRole(data.user.id);
 
-    if (error) {
-      Alert.alert('Thông báo', error.message);
-      return;
+      setLoading(false);
+      console.log('Đăng nhập thành công:', roleCheck.data);
+      if (!roleCheck.success) {
+        Alert.alert('Thông báo', 'Có lỗi xảy ra khi kiểm tra thông tin tài khoản!');
+        await supabase.auth.signOut();
+        return;
+      }
+
+      if (!roleCheck.isAdmin) {
+        Alert.alert('Thông báo', 'Tài khoản của bạn không có quyền đăng nhập!');
+        await supabase.auth.signOut();
+        return;
+      }
+
+      // Đăng nhập thành công với quyền admin
+      console.log('Đăng nhập thành công với quyền admin');
     }
-
-
-    // setLoading(true); 
   }
+
   return (
     <ScreenWrapper bg='#FFBF00'>
       <View style={styles.container}>
@@ -79,18 +92,14 @@ const LoginScr = () => {
           {/* footer */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>Bạn chưa có tài khoản?</Text>
-            {/* <Pressable onPress={() => navigation.navigate('SignUp')}> */}
             <Pressable onPress={() => router.push('/signUpScr')}>
               <Text style={{ color: theme.colors.primary, fontSize: hp(2.5), fontWeight: '500' }}>
                 Đăng ký
               </Text>
             </Pressable>
-
           </View>
         </View>
-
       </View>
-
     </ScreenWrapper>
   )
 }
@@ -122,6 +131,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 5,
   },
-
-
 })

@@ -359,7 +359,7 @@ const AssignTableScr = () => {
                 keyboardType="numeric"
                 value={peopleCount.toString()}
                 onChangeText={(value) => {
-                  const numValue = parseInt(value) || 1;
+                  const numValue = parseInt(value) || 0;
                   setPeopleCount(numValue);
                 }}
               />

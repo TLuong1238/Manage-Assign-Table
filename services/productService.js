@@ -1,41 +1,162 @@
-import { supabase } from '../lib/supabase'
+import { supabase } from "../lib/supabase";
 
 export const fetchProduct = async () => {
     try {
-        const { data, error } = await supabase
-            .from('products')
-            .select()
+        const {data, error} = await supabase
+        .from('products')
+        .select(`
+            *,
+            categories (
+                id,
+                name
+            )
+        `)
+        .order('created_at', { ascending: false });
 
-        // console.log('fetchTable data: ', data);
-
-
-        if (error) {
-            return { success: false, msg: error?.message };
+        if(error) {
+            return {success: false, msg: error?.message};
         }
-        return { success: true, data };
-
+        return {success: true, data};
 
     } catch (error) {
-        console.error('Error fetching product data:', error);
-        return { succes: false, msg: error.message };
+        console.error('Error fetching products:', error);
+        return {success: false, msg: error.message};
     }
 }
 
-export const fetchProductById = async (productId) => {
+// Tạo sản phẩm mới
+export const createProduct = async (productData) => {
     try {
-        const { data, error } = await supabase
-            .from('products')
-            .select()
-            .eq('id', productId)
-            .single(); // Lấy duy nhất 1 sản phẩm
+        const {data, error} = await supabase
+        .from('products')
+        .insert({
+            name: productData.name,
+            description: productData.description || '',
+            price: productData.price,
+            image: productData.image || null,
+            cateId: productData.cateId,  // Đổi tên field
+            created_at: new Date().toISOString()
+        })
+        .select(`
+            *,
+            categories (
+                id,
+                name
+            )
+        `)
+        .single();
 
-        if (error) {
-            return { success: false, msg: error?.message };
+        if(error) {
+            return {success: false, msg: error?.message};
         }
-        return { success: true, data };
+        return {success: true, data};
 
     } catch (error) {
-        console.error('Error fetching product data:', error);
-        return { success: false, msg: error.message };
+        console.error('Error creating product:', error);
+        return {success: false, msg: error.message};
+    }
+}
+
+// Cập nhật sản phẩm
+export const updateProduct = async (productId, productData) => {
+    try {
+        const {data, error} = await supabase
+        .from('products')
+        .update({
+            name: productData.name,
+            description: productData.description,
+            price: productData.price,
+            image: productData.image,
+            cateId: productData.cateId,  
+        })
+        .eq('id', productId)
+        .select(`
+            *,
+            categories (
+                id,
+                name
+            )
+        `)
+        .single();
+
+        if(error) {
+            return {success: false, msg: error?.message};
+        }
+        return {success: true, data};
+
+    } catch (error) {
+        console.error('Error updating product:', error);
+        return {success: false, msg: error.message};
+    }
+}
+
+// Xóa sản phẩm
+export const deleteProduct = async (productId) => {
+    try {
+        const {error} = await supabase
+        .from('products')
+        .delete()
+        .eq('id', productId);
+
+        if(error) {
+            return {success: false, msg: error?.message};
+        }
+        return {success: true};
+
+    } catch (error) {
+        console.error('Error deleting product:', error);
+        return {success: false, msg: error.message};
+    }
+}
+
+// Tìm kiếm sản phẩm theo tên
+export const searchProducts = async (searchTerm) => {
+    try {
+        const {data, error} = await supabase
+        .from('products')
+        .select(`
+            *,
+            categories (
+                id,
+                name
+            )
+        `)
+        .ilike('name', `%${searchTerm}%`)
+        .order('created_at', { ascending: false });
+
+        if(error) {
+            return {success: false, msg: error?.message};
+        }
+        return {success: true, data};
+
+    } catch (error) {
+        console.error('Error searching products:', error);
+        return {success: false, msg: error.message};
+    }
+}
+
+// Lấy sản phẩm theo ID
+export const getProductById = async (productId) => {
+    try {
+        const {data, error} = await supabase
+        .from('products')
+        .select(`
+            *,
+            categories (
+                id,
+                name
+            )
+        `)
+        .eq('id', productId)
+        .single();
+
+        if(error) {
+            return {success: false, msg: error?.message};
+        }
+        return {success: true, data};
+
+    } catch (error) {
+        console.error('Error fetching product by ID:', error);
+        return {success: false, msg: error.message};
     }
 }
