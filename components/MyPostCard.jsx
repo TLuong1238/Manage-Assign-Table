@@ -1,472 +1,537 @@
-import { Alert, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import React, { useEffect, useRef, useState } from 'react'
-import { theme } from '../constants/theme'
-import MyAvatar from './MyAvatar'
-import { hp, scriptHtmlTags, wp } from '../helper/common'
-import moment from 'moment'
-import * as Icon from 'react-native-feather'
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import {
+  Alert,
+  Share,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { Image } from 'expo-image';
+import { Video } from 'expo-av';
+import moment from 'moment';
+import * as Icon from 'react-native-feather';
 import RenderHtml from 'react-native-render-html';
-import { downloadFile, getSupabaseFileUrl } from '../services/imageService'
-import { Image } from 'expo-image'
-import { Video } from 'expo-av'
-import { createPostLike, removePostLike } from '../services/postServices'
 import * as Sharing from 'expo-sharing';
-import MyLoading from './MyLoading'
+
+import { theme } from '../constants/theme';
+import MyAvatar from './MyAvatar';
+import MyLoading from './MyLoading';
+import { hp, scriptHtmlTags, wp } from '../helper/common';
+import { downloadFile, getSupabaseFileUrl, isImageFile, isVideoFile } from '../services/imageService';
+import { createPostLike, removePostLike } from '../services/postServices';
+
+// ============= CONSTANTS =============
+const DOUBLE_CLICK_DELAY = 500;
 
 const textStyles = {
-    color: theme.colors.dark,
-    fontSize: hp(1.75)
-}
+  color: theme.colors.dark,
+  fontSize: hp(1.75)
+};
 
 const tagsStyles = {
-    div: textStyles,
-    p: textStyles,
-    ol: textStyles,
-    h1: {
-        color: theme.colors.dark
-    },
-    h4: {
-        color: theme.colors.dark
-    }
-}
-const MyPostCard = ({
-    item,
-    currentUser,
-    router,
+  div: textStyles,
+  p: textStyles,
+  ol: textStyles,
+  h1: { color: theme.colors.dark },
+  h4: { color: theme.colors.dark }
+};
 
-    hasShadow = true,
-    showMoreIcon = true,
-    showDeleteIcon = false,
-    onDelete = () => { },
-    onEdit = () => { },
+const shadowStyles = {
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.06,
+  shadowRadius: 6,
+  elevation: 1
+};
+
+// ============= MAIN COMPONENT =============
+const MyPostCard = React.memo(({
+  item,
+  currentUser,
+  router,
+  hasShadow = true,
+  showMoreIcon = true,
+  showDeleteIcon = false,
+  onDelete = () => {},
+  onEdit = () => {},
 }) => {
-    // console.log('currentUser in MyPostCard:', currentUser);
-    const shadowStyles = {
-        shadowOffset: {
-            width: 0,
-            height: 2
-        },
-        shadowOpacity: 0.06,
-        shadowRadious: 6,
-        elevation: 1
+  // ============= STATES =============
+  const [likeCount, setLikeCount] = useState(0);
+  const [localLiked, setLocalLiked] = useState(false);
+  const [postLikeDetails, setPostLikeDetails] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  
+  // ============= REFS =============
+  const lastClickTime = useRef(0);
+
+  // ============= MEMOIZED VALUES =============
+  const createAt = useMemo(() => moment(item?.created_at).fromNow(), [item?.created_at]);
+  
+  const fileUrl = useMemo(() => {
+    if (!item?.file) return null;
+    try {
+      return getSupabaseFileUrl(item.file);
+    } catch (error) {
+      console.error('Error getting file URL:', error);
+      return null;
+    }
+  }, [item?.file]);
+
+  const isImage = useMemo(() => {
+    return item?.file ? isImageFile(item.file) : false;
+  }, [item?.file]);
+
+  const isVideo = useMemo(() => {
+    return item?.file ? isVideoFile(item.file) : false;
+  }, [item?.file]);
+
+  const canEditDelete = useMemo(() => {
+    return showDeleteIcon && currentUser?.id === item?.userId;
+  }, [showDeleteIcon, currentUser?.id, item?.userId]);
+
+  // ============= EFFECTS =============
+  useEffect(() => {
+    if (!item?.likes) {
+      setLikeCount(0);
+      setPostLikeDetails([]);
+      setLocalLiked(false);
+      return;
     }
 
-    // const createAt = moment(item?.created_at).format('MMM D');
-    const createAt = moment(item?.created_at).fromNow();
-    //
-    const [likeCount, setLikeCount] = useState(0);
-    const [localLiked, setLocalLiked] = useState(false);
-    const [postLikeDetails, setPostLikeDetails] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [isProcessing, setIsProcessing] = useState(false);
-    const lastClickTime = useRef(0);
+    if (Array.isArray(item.likes) && item.likes.length > 0) {
+      if (item.likes[0]?.count !== undefined) {
+        // Old structure: likes contain count
+        setLikeCount(item.likes[0].count);
+      } else {
+        // New structure: likes is array of like details
+        setLikeCount(item.likes.length);
+        setPostLikeDetails(item.likes);
+        
+        // Check if current user liked the post
+        const userLiked = item.likes.some(like => like.userId === currentUser?.id);
+        setLocalLiked(userLiked);
+      }
+    } else {
+      setLikeCount(0);
+      setPostLikeDetails([]);
+      setLocalLiked(false);
+    }
+  }, [item?.likes, currentUser?.id]);
 
+  // ============= HANDLERS =============
+  const handleLike = useCallback(async () => {
+    // Prevent spam clicking
+    const now = Date.now();
+    if (now - lastClickTime.current < DOUBLE_CLICK_DELAY || isProcessing) {
+      return;
+    }
 
-    // console.log('postItem: ', item);
-    useEffect(() => {
-        // Khởi tạo số lượng like từ item.likes
+    lastClickTime.current = now;
+    setIsProcessing(true);
 
-        if (item?.likes && Array.isArray(item.likes) && item.likes.length > 0) {
-            // console.log("Detected likes data:", item.likes);
+    // Optimistic update
+    const wasLiked = localLiked;
+    setLocalLiked(!wasLiked);
+    setLikeCount(prev => wasLiked ? Math.max(0, prev - 1) : prev + 1);
 
-            // Kiểm tra xem likes có cấu trúc count hay không
-            if (item.likes[0]?.count !== undefined) {
-                // Cấu trúc cũ: likes có chứa count
-                setLikeCount(item.likes[0].count);
-                // console.log("Set count from likes[0].count:", item.likes[0].count);
-            } else {
-                // Cấu trúc mới: likes là mảng các chi tiết like
-                setLikeCount(item.likes.length);
-                setPostLikeDetails(item.likes);
-                // console.log("Set count from likes.length:", item.likes.length);
-
-                // Kiểm tra người dùng đã like bài viết chưa
-                const userLiked = item.likes.some(like => like.userId === currentUser?.id);
-                setLocalLiked(userLiked);
-                // console.log("Set localLiked:", userLiked);
-            }
+    try {
+      if (wasLiked) {
+        // Unlike
+        const res = await removePostLike(item?.id, currentUser?.id);
+        
+        if (!res.success) {
+          // Revert on failure
+          setLocalLiked(true);
+          setLikeCount(prev => prev + 1);
+          Alert.alert('Lỗi', 'Không thể bỏ thích bài viết');
         } else {
-            // Khởi tạo giá trị mặc định khi không có dữ liệu
-            setLikeCount(0);
-            setPostLikeDetails([]);
-            setLocalLiked(false);
-            // console.log("No likes data, setting defaults");
+          setPostLikeDetails(prev =>
+            prev.filter(like => like.userId !== currentUser?.id)
+          );
         }
-    }, [item, currentUser?.id]);
+      } else {
+        // Like
+        const data = {
+          userId: currentUser?.id,
+          postId: item?.id
+        };
 
-    const onLike = async () => {
-        // Chống click spam
-        const now = Date.now();
-        if (now - lastClickTime.current < 500 || isProcessing) {
-            return;
+        const res = await createPostLike(data);
+        
+        if (!res.success) {
+          // Revert on failure
+          setLocalLiked(false);
+          setLikeCount(prev => Math.max(0, prev - 1));
+          Alert.alert('Lỗi', 'Không thể thích bài viết');
+        } else if (res.data) {
+          setPostLikeDetails(prev => [...prev, res.data]);
         }
+      }
+    } catch (error) {
+      console.error('Like/unlike error:', error);
+      // Revert on error
+      setLocalLiked(wasLiked);
+      setLikeCount(prev => wasLiked ? prev + 1 : Math.max(0, prev - 1));
+      Alert.alert('Lỗi', 'Không thể xử lý thao tác thích');
+    } finally {
+      setTimeout(() => setIsProcessing(false), DOUBLE_CLICK_DELAY);
+    }
+  }, [localLiked, isProcessing, item?.id, currentUser?.id]);
 
-        lastClickTime.current = now;
-        setIsProcessing(true);
-        setLocalLiked(!localLiked);
-        setLikeCount(prev => localLiked ? Math.max(0, prev - 1) : prev + 1);
+  const handlePostDetails = useCallback(() => {
+    if (!showMoreIcon || !router) return;
+    
+    router.push({
+      pathname: 'main/postDetailsScr',
+      params: { postId: item?.id }
+    });
+  }, [showMoreIcon, router, item?.id]);
 
-        try {
-            if (localLiked) {
-                // Unlike
-                let res = await removePostLike(item?.id, currentUser?.id);
-                console.log('remove likes response:', res);
+  const handleShare = useCallback(async () => {
+    const hasBody = !!item?.body;
 
-                if (!res.success) {
-                    // Khôi phục UI nếu API thất bại
-                    setLocalLiked(true);
-                    setLikeCount(prev => prev + 1);
-                    Alert.alert('Post Like:', "Something went wrong!");
-                } else {
-                    // Cập nhật chi tiết likes
-                    setPostLikeDetails(prev =>
-                        prev.filter(like => like.userId !== currentUser?.id)
-                    );
-                }
-            } else {
-                // Like
-                let data = {
-                    userId: currentUser?.id,
-                    postId: item?.id
-                };
-
-                let res = await createPostLike(data);
-                console.log('add likes response:', res);
-
-                if (!res.success) {
-                    // Khôi phục UI nếu API thất bại
-                    setLocalLiked(false);
-                    setLikeCount(prev => Math.max(0, prev - 1));
-                    Alert.alert('Post Like:', "Something went wrong!");
-                } else if (res.data) {
-                    // Cập nhật chi tiết likes với data trả về từ API
-                    setPostLikeDetails(prev => [...prev, res.data]);
-                }
-            }
-        } catch (error) {
-            console.error('Like/unlike error:', error);
-            // Khôi phục UI nếu có lỗi
-            setLocalLiked(!localLiked);
-            setLikeCount(prev => localLiked ? prev + 1 : Math.max(0, prev - 1));
-            Alert.alert('Error', 'Could not process like action');
-        } finally {
-            setTimeout(() => {
-                setIsProcessing(false);
-            }, 500);
-        }
-    };
-
-    const openPostDetails = () => {
-        if (!showMoreIcon) return null;
-        router.push({
-            pathname: 'main/postDetailsScr',
-            params: { postId: item?.id }
+    if (hasBody && !isImage && !isVideo) {
+      // Text only
+      try {
+        await Share.share({
+          message: scriptHtmlTags(item?.body) || 'Xem bài viết này!',
         });
-    };
-    // likes, share
-
-    const onShare = async () => {
-        const hasBody = !!item?.body;
-        const isImage = item?.file && item.file.includes('postImages');
-        const isVideo = item?.file && item.file.includes('postVideos');
-
-        if (hasBody && !isImage && !isVideo) {
-            //text only
-            try {
-                await Share.share({
-                    message: scriptHtmlTags(item?.body) || 'Xem bài viết này!',
-                });
-            } catch (error) {
-                Alert.alert('Không thể chia sẻ nội dung');
-            }
-            return;
-        }
-
-        if (!hasBody && isImage) {
-            // pic only
-            setLoading(true);
-            let url = await downloadFile(getSupabaseFileUrl(item?.file).uri);
-            setLoading(false);
-            if (await Sharing.isAvailableAsync()) {
-                await Sharing.shareAsync(url, {
-                    mimeType: 'image/jpeg',
-                    dialogTitle: 'Chia sẻ ảnh',
-                });
-            } else {
-                Alert.alert('Không hỗ trợ chia sẻ trên thiết bị này');
-            }
-            return;
-        }
-
-        if (!hasBody && isVideo) {
-            //video only
-            setLoading(true);
-            let url = await downloadFile(getSupabaseFileUrl(item?.file).uri);
-            setLoading(false);
-            if (await Sharing.isAvailableAsync()) {
-                await Sharing.shareAsync(url, {
-                    mimeType: 'video/mp4',
-                    dialogTitle: 'Chia sẻ video',
-                });
-            } else {
-                Alert.alert('Không hỗ trợ chia sẻ trên thiết bị này');
-            }
-            return;
-        }
-
-        // both
-        Alert.alert(
-            "Chia sẻ bài viết",
-            "Bạn muốn chia sẻ gì?",
-            [
-                hasBody ? {
-                    text: "Nội dung bài viết",
-                    onPress: async () => {
-                        try {
-                            await Share.share({
-                                message: scriptHtmlTags(item?.body) || 'Xem bài viết này!',
-                            });
-                        } catch (error) {
-                            Alert.alert('Không thể chia sẻ nội dung');
-                        }
-                    }
-                } : null,
-                isImage ? {
-                    text: "Chia sẻ ảnh",
-                    onPress: async () => {
-                        setLoading(true);
-                        let url = await downloadFile(getSupabaseFileUrl(item?.file).uri);
-                        setLoading(false);
-                        if (await Sharing.isAvailableAsync()) {
-                            await Sharing.shareAsync(url, {
-                                mimeType: 'image/jpeg',
-                                dialogTitle: 'Chia sẻ ảnh',
-                            });
-                        } else {
-                            Alert.alert('Không hỗ trợ chia sẻ trên thiết bị này');
-                        }
-                    }
-                } : null,
-                isVideo ? {
-                    text: "Chia sẻ video",
-                    onPress: async () => {
-                        setLoading(true);
-                        let url = await downloadFile(getSupabaseFileUrl(item?.file).uri);
-                        setLoading(false);
-                        if (await Sharing.isAvailableAsync()) {
-                            await Sharing.shareAsync(url, {
-                                mimeType: 'video/mp4',
-                                dialogTitle: 'Chia sẻ video',
-                            });
-                        } else {
-                            Alert.alert('Không hỗ trợ chia sẻ trên thiết bị này');
-                        }
-                    }
-                } : null,
-                { text: "Hủy", style: "cancel" }
-            ].filter(Boolean)
-        );
-    };
-
-    // delete post
-    handlePostDelete = () => {
-        Alert.alert("Xác nhận", "Bạn có chắc chắn muốn xóa bài viết này không?", [
-            {
-                text: "Hủy bỏ",
-                onPress: () => console.log("Hủy"),
-                style: 'cancel'
-            },
-            {
-                text: "Đồng ý",
-                onPress: () => onDelete(item),
-                style: 'destructive'
-            }
-        ])
-
-
+      } catch (error) {
+        console.error('Share text error:', error);
+        Alert.alert('Lỗi', 'Không thể chia sẻ nội dung');
+      }
+      return;
     }
 
-    return (
-        <View style={[styles.container, hasShadow && shadowStyles]}>
-            <View style={styles.header}>
-                {/* User infor and post time */}
-                <View style={styles.userInfo}>
-                    <MyAvatar
-                        size={hp(4.5)}
-                        uri={item?.user?.image}
-                        rounded={25}
-                    />
-                    <View style={{ gap: 2 }}>
-                        <Text style={styles.username}>{item?.user?.name}</Text>
-                        <Text style={styles.postTime}>{createAt}</Text>
-                    </View>
-                </View>
-                {/* post Details */}
-                {
-                    showMoreIcon && (
-                        <TouchableOpacity onPress={openPostDetails}>
-                            <Icon.MoreHorizontal
-                                stroke={theme.colors.dark} height={hp(3)} width={hp(3)} />
-                        </TouchableOpacity>
-                    )
-                }
-                {
-                    showDeleteIcon && currentUser?.id == item?.userId && (
-                        <View style={styles.actions}>
-                            <TouchableOpacity onPress={() => onEdit(item)}>
-                                <Icon.Edit
-                                    stroke={theme.colors.dark} height={hp(3)} width={hp(3)} />
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={handlePostDelete}>
-                                <Icon.Trash2
-                                    stroke={'red'} height={hp(3)} width={hp(3)} />
-                            </TouchableOpacity>
-                        </View>
-                    )
-                }
-            </View>
-            {/* post body */}
-            <View stye={styles.content}>
-                <View style={styles.postBody}>
-                    {
-                        item?.body && (
-                            <RenderHtml
-                                contentWidth={wp(100)}
-                                source={{ html: item?.body }}
-                                tagsStyles={tagsStyles}
-                            />
-                        )
-                    }
-                </View>
+    if (!hasBody && (isImage || isVideo)) {
+      // Media only
+      await shareMedia(isImage ? 'image/jpeg' : 'video/mp4');
+      return;
+    }
 
-                {/* post images */}
-                {
-                    item?.file && item.file?.includes('postImages') && (
-                        <Image
-                            source={getSupabaseFileUrl(item.file)}
-                            transition={100}
-                            style={styles.postMedia}
-                            contentFit='cover'
-                        />
-                    )
-                }
-                {/* post videos */}
-                {
-                    item?.file && item.file?.includes('postVideos') && (
-                        <Video
-                            style={styles.postMedia}
-                            source={getSupabaseFileUrl(item.file)}
-                            useNativeControls
-                            resizeMode='cover'
-                            isLooping
-                        />
-                    )
-                }
-            </View>
-            {/* like, commennts, share */}
-            <View style={styles.footer}>
-                <View style={styles.footerButton}>
-                    <TouchableOpacity onPress={onLike}>
-                        <Icon.Heart
-                            color={localLiked ? theme.colors.rose : theme.colors.textLight}
-                            height={30} width={30}
-                            fill={localLiked ? theme.colors.rose : 'none'} />
-                    </TouchableOpacity>
-                    <Text style={styles.count}>
-                        {
-                            likeCount
-                        }
-                    </Text>
-                </View>
-                <View style={styles.footerButton}>
-                    <TouchableOpacity onPress={openPostDetails}>
-                        <Icon.MessageSquare stroke={theme.colors.rose} height={30} width={30} />
-                    </TouchableOpacity>
-                    <Text style={styles.count}>
-                        {
-                            item?.comments && item.comments[0]?.count || 0
-                        }
-                    </Text>
-                </View>
-                <View style={styles.footerButton}>
-                    {
-                        loading ? (
-                            <MyLoading />
-                        ) : (
-                            <TouchableOpacity onPress={onShare}>
-                                <Icon.Share2 stroke={theme.colors.rose} height={30} width={30} />
-                            </TouchableOpacity>
-                        )
-                    }
+    if (hasBody && (isImage || isVideo)) {
+      // Both content and media
+      showShareOptions(hasBody, isImage, isVideo);
+    }
+  }, [item?.body, isImage, isVideo, fileUrl]);
 
-                </View>
+  const shareMedia = useCallback(async (mimeType) => {
+    if (!fileUrl) {
+      Alert.alert('Lỗi', 'Không tìm thấy file để chia sẻ');
+      return;
+    }
 
-            </View>
+    setLoading(true);
+    try {
+      const url = await downloadFile(fileUrl);
+      
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(url, {
+          mimeType,
+          dialogTitle: mimeType.includes('image') ? 'Chia sẻ ảnh' : 'Chia sẻ video',
+        });
+      } else {
+        Alert.alert('Lỗi', 'Không hỗ trợ chia sẻ trên thiết bị này');
+      }
+    } catch (error) {
+      console.error('Share media error:', error);
+      Alert.alert('Lỗi', 'Không thể chia sẻ file');
+    } finally {
+      setLoading(false);
+    }
+  }, [fileUrl]);
+
+  const showShareOptions = useCallback((hasBody, hasImage, hasVideo) => {
+    const options = [];
+
+    if (hasBody) {
+      options.push({
+        text: "Nội dung bài viết",
+        onPress: async () => {
+          try {
+            await Share.share({
+              message: scriptHtmlTags(item?.body) || 'Xem bài viết này!',
+            });
+          } catch (error) {
+            Alert.alert('Lỗi', 'Không thể chia sẻ nội dung');
+          }
+        }
+      });
+    }
+
+    if (hasImage) {
+      options.push({
+        text: "Chia sẻ ảnh",
+        onPress: () => shareMedia('image/jpeg')
+      });
+    }
+
+    if (hasVideo) {
+      options.push({
+        text: "Chia sẻ video",
+        onPress: () => shareMedia('video/mp4')
+      });
+    }
+
+    options.push({ text: "Hủy", style: "cancel" });
+
+    Alert.alert("Chia sẻ bài viết", "Bạn muốn chia sẻ gì?", options);
+  }, [item?.body, shareMedia]);
+
+  const handlePostDelete = useCallback(() => {
+    Alert.alert(
+      "Xác nhận", 
+      "Bạn có chắc chắn muốn xóa bài viết này không?", 
+      [
+        {
+          text: "Hủy bỏ",
+          style: 'cancel'
+        },
+        {
+          text: "Đồng ý",
+          onPress: () => onDelete(item),
+          style: 'destructive'
+        }
+      ]
+    );
+  }, [onDelete, item]);
+
+  const handleEdit = useCallback(() => {
+    onEdit(item);
+  }, [onEdit, item]);
+
+  // ============= RENDER =============
+  return (
+    <View style={[styles.container, hasShadow && shadowStyles]}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.userInfo}>
+          <MyAvatar
+            size={hp(4.5)}
+            uri={item?.user?.image}
+            rounded={25}
+          />
+          <View style={styles.userDetails}>
+            <Text style={styles.username}>{item?.user?.name}</Text>
+            <Text style={styles.postTime}>{createAt}</Text>
+          </View>
         </View>
 
-    )
-}
+        {/* Action buttons */}
+        {showMoreIcon && (
+          <TouchableOpacity onPress={handlePostDetails} style={styles.actionButton}>
+            <Icon.MoreHorizontal
+              stroke={theme.colors.dark}
+              height={hp(3)}
+              width={hp(3)}
+            />
+          </TouchableOpacity>
+        )}
 
-export default MyPostCard
+        {canEditDelete && (
+          <View style={styles.actions}>
+            <TouchableOpacity onPress={handleEdit} style={styles.actionButton}>
+              <Icon.Edit
+                stroke={theme.colors.dark}
+                height={hp(3)}
+                width={hp(3)}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handlePostDelete} style={styles.actionButton}>
+              <Icon.Trash2
+                stroke={theme.colors.rose}
+                height={hp(3)}
+                width={hp(3)}
+              />
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
 
+      {/* Content */}
+      <View style={styles.content}>
+        {/* Post body */}
+        {item?.body && (
+          <View style={styles.postBody}>
+            <RenderHtml
+              contentWidth={wp(100)}
+              source={{ html: item.body }}
+              tagsStyles={tagsStyles}
+            />
+          </View>
+        )}
 
+        {/* Media */}
+        {fileUrl && (
+          <View style={styles.mediaContainer}>
+            {isImage && (
+              <Image
+                source={{ uri: fileUrl }}
+                transition={100}
+                style={styles.postMedia}
+                contentFit="cover"
+              />
+            )}
+            
+            {isVideo && (
+              <Video
+                style={styles.postMedia}
+                source={{ uri: fileUrl }}
+                useNativeControls
+                resizeMode="cover"
+                isLooping={false}
+                shouldPlay={false}
+              />
+            )}
+          </View>
+        )}
+      </View>
+
+      {/* Footer */}
+      <View style={styles.footer}>
+        {/* Like button */}
+        <View style={styles.footerButton}>
+          <TouchableOpacity 
+            onPress={handleLike}
+            disabled={isProcessing}
+            style={styles.actionButton}
+          >
+            <Icon.Heart
+              color={localLiked ? theme.colors.rose : theme.colors.textLight}
+              height={30}
+              width={30}
+              fill={localLiked ? theme.colors.rose : 'none'}
+            />
+          </TouchableOpacity>
+          <Text style={styles.count}>{likeCount}</Text>
+        </View>
+
+        {/* Comment button */}
+        <View style={styles.footerButton}>
+          <TouchableOpacity onPress={handlePostDetails} style={styles.actionButton}>
+            <Icon.MessageSquare
+              stroke={theme.colors.textLight}
+              height={30}
+              width={30}
+            />
+          </TouchableOpacity>
+          <Text style={styles.count}>
+            {item?.comments?.[0]?.count || 0}
+          </Text>
+        </View>
+
+        {/* Share button */}
+        <View style={styles.footerButton}>
+          {loading ? (
+            <MyLoading />
+          ) : (
+            <TouchableOpacity onPress={handleShare} style={styles.actionButton}>
+              <Icon.Share2
+                stroke={theme.colors.textLight}
+                height={30}
+                width={30}
+              />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+});
+
+// ============= STYLES =============
 const styles = StyleSheet.create({
-    container: {
-        gap: 10,
-        marginBottom: 15,
-        borderRadius: 15,
-        borderCurve: 'continuous',
-        padding: 10,
-        paddingVertical: 12,
-        backgroundColor: 'white',
-        borderWidth: 0.5,
-        borderColor: theme.colors.gray,
-        shadowColor: '#000'
-    },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between'
-    },
-    userInfo: {
-        flexDirection: 'row',
-        gap: 10
-    },
-    content: {
-        gap: 10
-    },
-    postTime: {
-        fontSize: hp(1.5),
-        color: theme.colors.textLight,
-        fontWeight: 'semibold'
-    },
-    postMedia: {
-        height: hp(40),
-        width: '100%',
-        borderRadius: 15,
-        borderCurve: 'continuous'
-    },
-    postBody: {
-        marginLeft: 5
-    },
-    footer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 15
-    },
-    footerButton: {
-        marginLeft: 5,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4
-    },
-    actions: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 15,
-    },
-    count: {
-        color: theme.colors.text,
-        fontSize: hp(1.5),
-    }
+  container: {
+    gap: 10,
+    marginBottom: 15,
+    borderRadius: 25, // ✅ thay theme.radius.lg
+    borderCurve: 'continuous',
+    padding: wp(3),
+    paddingVertical: hp(1.5),
+    backgroundColor: 'white',
+    borderWidth: 0.5,
+    borderColor: theme.colors.gray,
+  },
 
-})
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: wp(3),
+    flex: 1,
+  },
+
+  userDetails: {
+    gap: 2,
+  },
+
+  username: {
+    fontSize: hp(1.8),
+    fontWeight: '600',
+    color: theme.colors.dark,
+  },
+
+  postTime: {
+    fontSize: hp(1.5),
+    color: theme.colors.textLight,
+    fontWeight: '500',
+  },
+
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: wp(3),
+  },
+
+  actionButton: {
+    padding: wp(1),
+  },
+
+  content: {
+    gap: hp(1.5),
+  },
+
+  postBody: {
+    marginLeft: wp(1),
+  },
+
+  mediaContainer: {
+    borderRadius: 15, // ✅ thay theme.radius.md
+    overflow: 'hidden',
+  },
+
+  postMedia: {
+    height: hp(40),
+    width: '100%',
+    borderRadius: 15, // ✅ thay theme.radius.md
+  },
+
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: wp(4),
+    paddingTop: hp(1),
+  },
+
+  footerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: wp(1),
+  },
+
+  count: {
+    color: theme.colors.text,
+    fontSize: hp(1.5),
+    fontWeight: '500',
+  },
+});
+
+MyPostCard.displayName = 'MyPostCard';
+
+export default MyPostCard;

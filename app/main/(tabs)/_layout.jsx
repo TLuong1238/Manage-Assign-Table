@@ -37,7 +37,7 @@ export default function TabsLayout() {
       />
       {/* Mạng */}
       <Tabs.Screen
-        name="socialScr"
+        name="managePostScr"
         options={{
           title: 'Mạng xã hội',
           tabBarIcon: ({ color }) => (

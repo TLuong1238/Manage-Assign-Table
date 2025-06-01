@@ -82,14 +82,14 @@ export const fetchDetailByBillIds = async (billIds) => {
 // Logic xác định trạng thái bàn dựa trên bill (cải tiến từ assignTableScr)
 const determineTableStatus = (bill) => {
     if (!bill) return 'empty';
-    
+
     const now = new Date();
     const billTime = new Date(bill.time);
     const timeDiff = billTime.getTime() - now.getTime();
     const minutesUntilBill = Math.floor(timeDiff / (1000 * 60));
-    
+
     console.log(`Bill ${bill.id}: state=${bill.state}, visit=${bill.visit}, minutesUntil=${minutesUntilBill}`);
-    
+
     // Logic trạng thái dựa trên state và visit
     switch (bill.state) {
         case 'in_order':
@@ -103,11 +103,11 @@ const determineTableStatus = (bill) => {
                     return 'ready'; // Đã đến giờ, chưa checkin
                 }
             }
-            
+
         case 'completed':
         case 'cancelled':
             return 'empty'; // Đã hoàn thành hoặc hủy
-            
+
         default:
             return 'empty';
     }
@@ -137,7 +137,7 @@ export const getTablesWithBillStatus = async () => {
 
         // 4. Lấy detail bills của những bills active
         const activeBillIds = activeBills.map(bill => bill.id);
-        
+
         let detailBills = [];
         if (activeBillIds.length > 0) {
             const detailResult = await fetchDetailByBillIds(activeBillIds);
@@ -162,7 +162,7 @@ export const getTablesWithBillStatus = async () => {
         const tablesWithStatus = tablesResult.data.map(table => {
             const bill = tableBillMap[table.id];
             const status = determineTableStatus(bill);
-            
+
             return {
                 ...table,
                 bill: bill || null,
@@ -174,10 +174,10 @@ export const getTablesWithBillStatus = async () => {
             };
         });
 
-        console.log('Tables with status:', tablesWithStatus.map(t => ({ 
-            id: t.id, 
-            status: t.status, 
-            hasBill: !!t.bill 
+        console.log('Tables with status:', tablesWithStatus.map(t => ({
+            id: t.id,
+            status: t.status,
+            hasBill: !!t.bill
         })));
 
         return { success: true, data: tablesWithStatus };
@@ -190,16 +190,16 @@ export const getTablesWithBillStatus = async () => {
 // Utility functions
 export const getTimeUntilNextBill = (bill) => {
     if (!bill || !bill.time) return null;
-    
+
     const now = new Date();
     const billTime = new Date(bill.time);
     const diffInMs = billTime.getTime() - now.getTime();
-    
+
     if (diffInMs <= 0) return { minutes: 0, seconds: 0, isOverdue: true };
-    
+
     const minutes = Math.floor(diffInMs / (1000 * 60));
     const seconds = Math.floor((diffInMs % (1000 * 60)) / 1000);
-    
+
     return { minutes, seconds, isOverdue: false };
 };
 
@@ -214,7 +214,7 @@ export const getStatusDisplayInfo = (table) => {
             };
         case 'reserved':
             return {
-                color: '#ffa502', 
+                color: '#ffa502',
                 text: 'Đã đặt',
                 icon: 'schedule'
             };
@@ -235,17 +235,27 @@ export const getStatusDisplayInfo = (table) => {
 };
 
 // Action functions
+// Action functions
 export const checkinCustomer = async (billId) => {
     try {
         const { error } = await supabase
             .from('bills')
-            .update({ visit: 'in_process' })
+            .update({ visit: 'visited' })
             .eq('id', billId);
-        
+
         if (error) {
             return { success: false, msg: error.message };
         }
-        
+
+        // ✅ Refresh table status sau check-in
+        const refreshResult = await getTablesWithBillStatus();
+        if (refreshResult.success) {
+            return {
+                success: true,
+                updatedTables: refreshResult.data
+            };
+        }
+
         return { success: true };
     } catch (error) {
         console.error('Error checking in customer:', error);
@@ -257,16 +267,25 @@ export const checkoutCustomer = async (billId) => {
     try {
         const { error } = await supabase
             .from('bills')
-            .update({ 
+            .update({
                 state: 'completed',
                 visit: 'visited'
             })
             .eq('id', billId);
-        
+
         if (error) {
             return { success: false, msg: error.message };
         }
-        
+
+        // ✅ Refresh table status sau check-out
+        const refreshResult = await getTablesWithBillStatus();
+        if (refreshResult.success) {
+            return {
+                success: true,
+                updatedTables: refreshResult.data
+            };
+        }
+
         return { success: true };
     } catch (error) {
         console.error('Error checking out customer:', error);
@@ -278,16 +297,16 @@ export const cancelReservation = async (billId) => {
     try {
         const { error } = await supabase
             .from('bills')
-            .update({ 
+            .update({
                 state: 'cancelled',
                 visit: 'un_visited'
             })
             .eq('id', billId);
-        
+
         if (error) {
             return { success: false, msg: error.message };
         }
-        
+
         return { success: true };
     } catch (error) {
         console.error('Error cancelling reservation:', error);

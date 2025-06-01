@@ -1,5 +1,16 @@
-import { Alert, Dimensions, FlatList, Pressable, StyleSheet, Text, View, RefreshControl } from 'react-native'
-import React, { useEffect, useState, useRef } from 'react'
+import {
+    Alert,
+    Dimensions,
+    FlatList,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
+    RefreshControl,
+    Modal,
+    ScrollView
+} from 'react-native'
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import ScreenWrapper from '../../../components/ScreenWrapper'
 import { hp, wp } from '../../../helper/common'
 import { theme } from '../../../constants/theme'
@@ -8,10 +19,9 @@ import MyTableItem from '../../../components/MyTableItem'
 import MaterialIcons from '@expo/vector-icons/MaterialIcons'
 import { useRouter } from 'expo-router'
 import DateTimePicker from '@react-native-community/datetimepicker'
-import { 
-    getAllFloors, 
-    getTablesWithBillStatus, 
-    getTimeUntilNextBill,
+import {
+    getAllFloors,
+    getTablesWithBillStatus,
     checkinCustomer,
     checkoutCustomer,
     cancelReservation
@@ -19,979 +29,582 @@ import {
 import { supabase } from '../../../lib/supabase'
 import PagerView from 'react-native-pager-view'
 
-const { width: screenWidth } = Dimensions.get('window');
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-const tableManageScr = () => {
+// ===================
+// CONSTANTS & BUSINESS RULES
+// ===================
+const BILL_STATE = {
+    IN_ORDER: 'in_order',
+    COMPLETED: 'completed',
+    CANCELLED: 'cancelled'
+};
+
+const VISIT_STATUS = {
+    UN_VISITED: 'un_visited',
+    ON_PROCESS: 'on_process',
+    VISITED: 'visited'
+};
+
+const TABLE_STATUS = {
+    EMPTY: 'empty',
+    RESERVED: 'reserved',       // in_order + on_process (đặt bàn)
+    OCCUPIED: 'occupied'        // in_order + visited (có khách)
+};
+
+const BUSINESS_RULES = {
+    autoCheckIntervalMs: 30000,           // 30s auto-check
+    reservationShowMinutes: 10,           // 10p hiển thị đặt bàn trước
+    autoCheckoutAfterMinutes: 40,         // 40p tự động checkout
+    statusUpdateDelay: 5000,
+    errorStatusDelay: 3000
+};
+
+const TABLE_STATUS_CONFIG = {
+    [TABLE_STATUS.EMPTY]: {
+        text: 'Trống',
+        color: '#2ed573',
+        bgColor: '#f0fff4',
+        icon: 'restaurant',
+        priority: 1
+    },
+    [TABLE_STATUS.RESERVED]: {
+        text: 'Đã đặt',
+        color: '#ffa502',
+        bgColor: '#fff8f0',
+        icon: 'schedule',
+        priority: 2
+    },
+    [TABLE_STATUS.OCCUPIED]: {
+        text: 'Có khách',
+        color: '#ff4757',
+        bgColor: '#fff0f0',
+        icon: 'people',
+        priority: 3
+    }
+};
+
+// ===================
+// CORE BUSINESS LOGIC
+// ===================
+const getTableStatusFromBill = (bill, referenceTime) => {
+    if (!bill) return TABLE_STATUS.EMPTY;
+
+    const billTime = new Date(bill.time);
+    const minutesDiff = Math.floor((referenceTime.getTime() - billTime.getTime()) / 60000);
+
+    // Logic mapping theo yêu cầu
+    if (bill.state === BILL_STATE.IN_ORDER) {
+        if (bill.visit === VISIT_STATUS.ON_PROCESS) {
+            // in_order + on_process = RESERVED (đặt bàn)
+            if (minutesDiff >= -BUSINESS_RULES.reservationShowMinutes &&
+                minutesDiff <= BUSINESS_RULES.autoCheckoutAfterMinutes) {
+                return TABLE_STATUS.RESERVED;
+            }
+        }
+        else if (bill.visit === VISIT_STATUS.VISITED) {
+            // in_order + visited = OCCUPIED (có khách)
+            if (bill.visit === VISIT_STATUS.VISITED) {
+                return TABLE_STATUS.OCCUPIED;
+            }
+        }
+    }
+
+    // completed + visited = empty
+    // cancelled + un_visited = empty (khách không đến)  
+    // cancelled + on_process = empty (khách hủy)
+    return TABLE_STATUS.EMPTY;
+};
+
+// ===================
+// MAIN COMPONENT
+// ===================
+const manageTableScr = () => {
     const router = useRouter();
     const pagerRef = useRef(null);
     const autoCheckIntervalRef = useRef(null);
-    
-    // States
-    const [floors, setFloors] = useState([]);
-    const [currentFloor, setCurrentFloor] = useState(0);
-    const [tables, setTables] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [refreshing, setRefreshing] = useState(false);
-    const [selectedTable, setSelectedTable] = useState(null);
-    const [lastAutoCheck, setLastAutoCheck] = useState(new Date());
-    const [autoCheckStatus, setAutoCheckStatus] = useState('');
-    const [statusChanges, setStatusChanges] = useState(0);
-    const [dataFixes, setDataFixes] = useState(0);
-    const [businessFixes, setBusinessFixes] = useState(0);
-    
-    // DateTime Picker States
-    const [selectedDateTime, setSelectedDateTime] = useState(new Date());
-    const [showDatePicker, setShowDatePicker] = useState(false);
-    const [showTimePicker, setShowTimePicker] = useState(false);
-    const [isLiveMode, setIsLiveMode] = useState(true); // Live mode vs custom time
-
-    // Khởi tạo
-    useEffect(() => {
-        initializeScreen();
-        return cleanup;
-    }, []);
-
-    // Re-calculate khi selectedDateTime thay đổi
-    useEffect(() => {
-        if (!isLiveMode) {
-            refreshTableDataWithCustomTime();
-        }
-    }, [selectedDateTime, isLiveMode]);
-
-    const initializeScreen = async () => {
-        await loadInitialData();
-        setupRealtimeSubscription();
-        startAutoCheck();
-    };
-
-    const cleanup = () => {
-        console.log('🧹 Cleaning up screen...');
-        supabase.removeAllChannels();
-        stopAutoCheck();
-    };
+    const channelRef = useRef(null);
+    const isUnmountedRef = useRef(false);
 
     // ===================
-    // DATETIME MANAGEMENT
+    // STATES
     // ===================
+    const [state, setState] = useState({
+        // App state
+        floors: [],
+        tables: [],
+        currentFloor: 0,
+        selectedTable: null,
+        loading: true,
+        refreshing: false,
 
-    const getCurrentReferenceTime = () => {
-        return isLiveMode ? new Date() : selectedDateTime;
-    };
+        // Time state
+        selectedDateTime: new Date(),
+        showDatePicker: false,
+        showTimePicker: false,
+        isLiveMode: true,
 
-    const formatSelectedDateTime = () => {
-        if (isLiveMode) return 'Thời gian thực';
-        return selectedDateTime.toLocaleString('vi-VN', {
-            weekday: 'short',
+        // Auto-check state
+        lastCheck: new Date(),
+        autoCheckStatus: '',
+        businessFixes: 0
+    });
+
+    // ===================
+    // COMPUTED VALUES
+    // ===================
+    const currentReferenceTime = useMemo(() =>
+        state.isLiveMode ? new Date() : state.selectedDateTime
+        , [state.isLiveMode, state.selectedDateTime]);
+
+    const formattedDateTime = useMemo(() => {
+        if (state.isLiveMode) return 'Thời gian thực';
+        return currentReferenceTime.toLocaleString('vi-VN', {
             day: '2-digit',
             month: '2-digit',
             hour: '2-digit',
             minute: '2-digit'
         });
-    };
+    }, [state.isLiveMode, currentReferenceTime]);
 
-    const onDateChange = (event, date) => {
-        setShowDatePicker(false);
-        if (date) {
-            // Giữ nguyên thời gian, chỉ thay đổi ngày
-            const newDateTime = new Date(selectedDateTime);
-            newDateTime.setFullYear(date.getFullYear());
-            newDateTime.setMonth(date.getMonth());
-            newDateTime.setDate(date.getDate());
-            setSelectedDateTime(newDateTime);
-        }
-    };
-
-    const onTimeChange = (event, time) => {
-        setShowTimePicker(false);
-        if (time) {
-            // Giữ nguyên ngày, chỉ thay đổi thời gian
-            const newDateTime = new Date(selectedDateTime);
-            newDateTime.setHours(time.getHours());
-            newDateTime.setMinutes(time.getMinutes());
-            newDateTime.setSeconds(0);
-            newDateTime.setMilliseconds(0);
-            setSelectedDateTime(newDateTime);
-        }
-    };
-
-    const toggleLiveMode = () => {
-        if (isLiveMode) {
-            // Chuyển sang custom mode, set time hiện tại
-            setSelectedDateTime(new Date());
-            setIsLiveMode(false);
-        } else {
-            // Chuyển về live mode
-            setIsLiveMode(true);
-        }
-    };
-
-    // ===================
-    // ENHANCED TABLE STATUS LOGIC
-    // ===================
-
-    const determineTableStatusWithCustomTime = (bill, referenceTime) => {
-        if (!bill) return 'empty';
-        
-        const billTime = new Date(bill.time);
-        const minutesUntilBill = Math.floor((billTime.getTime() - referenceTime.getTime()) / (1000 * 60));
-        
-        console.log(`🔍 Determining status for bill ${bill.id} at reference time ${referenceTime.toLocaleTimeString()}: state=${bill.state}, visit=${bill.visit}, minutesUntil=${minutesUntilBill}`);
-        
-        switch (bill.state) {
-            case 'in_order':
-                switch (bill.visit) {
-                    case 'in_process':
-                        // Kiểm tra xem có quá 30 phút kể từ thời điểm time của bill không
-                        const minutesSinceBillTime = Math.floor((referenceTime.getTime() - billTime.getTime()) / (1000 * 60));
-                        
-                        if (minutesSinceBillTime <= 30) {
-                            console.log(`✅ Bill ${bill.id}: in_process within 30min = occupied (${minutesSinceBillTime}min)`);
-                            return 'occupied';  // Vẫn đang trong thời gian sử dụng hợp lý
-                        } else {
-                            console.log(`⚠️ Bill ${bill.id}: in_process over 30min = empty (${minutesSinceBillTime}min, should be auto-checked out)`);
-                            return 'empty';     // Đã quá 30 phút, cần checkout
-                        }
-                        
-                    case 'un_visited':
-                        // Chỉ hiển thị đặt bàn trong vòng 10 phút tới
-                        if (minutesUntilBill > 0 && minutesUntilBill <= 10) {
-                            console.log(`✅ Bill ${bill.id}: reserved in next 10min = reserved (${minutesUntilBill}min)`);
-                            return 'reserved';  // Đặt bàn trong 10 phút tới
-                        } else if (minutesUntilBill <= 0 && minutesUntilBill >= -5) {
-                            console.log(`✅ Bill ${bill.id}: ready for checkin = ready (${Math.abs(minutesUntilBill)}min late)`);
-                            return 'ready';     // Đã đến giờ, sẵn sàng checkin (trong vòng 5 phút)
-                        } else {
-                            console.log(`📝 Bill ${bill.id}: outside 10min window = empty (${minutesUntilBill}min)`);
-                            return 'empty';     // Ngoài khung 10 phút
-                        }
-                        
-                    case 'visited':
-                        console.warn(`⚠️ Inconsistent data: Bill ${bill.id} is visited but still in_order`);
-                        return 'empty';
-                        
-                    default:
-                        console.warn(`⚠️ Unknown visit status: ${bill.visit} for bill ${bill.id}`);
-                        return 'empty';
-                }
-                
-            case 'completed':
-            case 'cancelled':
-                console.log(`✅ Bill ${bill.id}: ${bill.state} = empty`);
-                return 'empty';
-                
-            default:
-                console.warn(`⚠️ Unknown state: ${bill.state} for bill ${bill.id}`);
-                return 'empty';
-        }
-    };
-
-    // ===================
-    // DATA LOADING WITH CUSTOM TIME
-    // ===================
-
-    const refreshTableDataWithCustomTime = async () => {
-        try {
-            console.log(`🔄 Refreshing table data with reference time: ${getCurrentReferenceTime().toLocaleString()}`);
-            
-            // Lấy tất cả bàn và bills
-            const tablesResult = await getTablesWithBillStatus();
-            if (!tablesResult.success) {
-                console.error('Failed to get tables');
-                return;
+    const tableStats = useMemo(() => {
+        const stats = {
+            [TABLE_STATUS.OCCUPIED]: 0,
+            [TABLE_STATUS.RESERVED]: 0,
+            [TABLE_STATUS.EMPTY]: 0,
+            total: state.tables.length
+        };
+        state.tables.forEach(table => {
+            if (table.status) {
+                stats[table.status]++;
             }
+        });
+        return stats;
+    }, [state.tables]);
 
-            const referenceTime = getCurrentReferenceTime();
-            
-            // Tính toán lại status cho từng bàn dựa trên thời gian tham chiếu
-            const updatedTables = tablesResult.data.map(table => {
+    const tablesByFloor = useMemo(() => {
+        const floors = {};
+        state.tables.forEach(table => {
+            if (!floors[table.floor]) floors[table.floor] = [];
+            floors[table.floor].push(table);
+        });
+
+        Object.keys(floors).forEach(floor => {
+            floors[floor].sort((a, b) => a.id - b.id);
+        });
+
+        return floors;
+    }, [state.tables]);
+
+    const formatLastCheck = useMemo(() => {
+        const diff = Math.floor((new Date() - state.lastCheck) / 1000);
+        return diff < 60 ? `${diff}s` : `${Math.floor(diff / 60)}m`;
+    }, [state.lastCheck]);
+
+    // ===================
+    // STATE UPDATER
+    // ===================
+    const updateState = useCallback((updates) => {
+        if (!isUnmountedRef.current) {
+            setState(prev => ({ ...prev, ...updates }));
+        }
+    }, []);
+
+    // ===================
+    // DATA OPERATIONS
+    // ===================
+    const refreshTableData = useCallback(async () => {
+        if (isUnmountedRef.current) return false;
+
+        try {
+            const result = await getTablesWithBillStatus();
+            if (!result.success) throw new Error(result.msg);
+
+            console.log('🔄 Refreshing tables at:', currentReferenceTime.toLocaleString('vi-VN'));
+
+            const updatedTables = result.data.map(table => {
+                const newStatus = getTableStatusFromBill(table.bill, currentReferenceTime);
+
                 if (table.bill) {
-                    const newStatus = determineTableStatusWithCustomTime(table.bill, referenceTime);
-                    return {
-                        ...table,
-                        status: newStatus
-                    };
+                    const billTime = new Date(table.bill.time);
+                    const minutesDiff = Math.floor((currentReferenceTime.getTime() - billTime.getTime()) / 60000);
+                    console.log(`📊 Table ${table.id}: ${table.bill.state} + ${table.bill.visit} = ${newStatus} (${minutesDiff}m)`);
                 }
-                return {
-                    ...table,
-                    status: 'empty'
-                };
+
+                return { ...table, status: newStatus };
             });
 
-            setTables(updatedTables);
-            console.log('✅ Tables refreshed with custom time logic');
-            
+            updateState({ tables: updatedTables });
+            return true;
         } catch (error) {
-            console.error('❌ Error refreshing table data with custom time:', error);
+            console.error('❌ Refresh error:', error);
+            return false;
         }
-    };
+    }, [currentReferenceTime, updateState]);
 
-    const loadInitialData = async () => {
-        setLoading(true);
+    const loadInitialData = useCallback(async () => {
+        if (isUnmountedRef.current) return;
+
+        updateState({ loading: true });
+
         try {
-            console.log('📥 Loading initial data...');
-            
-            // Load floors
-            const floorsResult = await getAllFloors();
+            const [floorsResult, tablesSuccess] = await Promise.all([
+                getAllFloors(),
+                refreshTableData()
+            ]);
+
             if (floorsResult.success) {
-                setFloors(floorsResult.data);
-                console.log('✅ Floors loaded:', floorsResult.data);
+                updateState({ floors: floorsResult.data });
             }
 
-            // Load tables with custom time logic
-            if (isLiveMode) {
-                const tablesResult = await getTablesWithBillStatus();
-                if (tablesResult.success) {
-                    setTables(tablesResult.data);
-                    console.log('✅ Tables loaded (live mode):', tablesResult.data.length, 'tables');
-                } else {
-                    Alert.alert('Lỗi', tablesResult.msg);
-                }
-            } else {
-                await refreshTableDataWithCustomTime();
+            if (!tablesSuccess) {
+                Alert.alert('Lỗi', 'Không thể tải dữ liệu bàn');
             }
-
         } catch (error) {
-            console.error('❌ Load data error:', error);
+            console.error('❌ Load error:', error);
             Alert.alert('Lỗi', 'Không thể tải dữ liệu');
         }
-        setLoading(false);
-    };
 
-    const onRefresh = async () => {
-        setRefreshing(true);
-        await loadInitialData();
-        setRefreshing(false);
-    };
+        updateState({ loading: false });
+    }, [refreshTableData, updateState]);
 
     // ===================
-    // ENHANCED AUTO-CHECK (chỉ hoạt động trong live mode)
+    // AUTO-CHECK SYSTEM
     // ===================
+    const applyDatabaseUpdates = useCallback(async (updates) => {
+        let successCount = 0;
 
-    const startAutoCheck = () => {
-        if (!isLiveMode) {
-            console.log('🚫 Auto-check disabled in custom time mode');
-            return;
-        }
-        
-        console.log('🤖 Starting enhanced auto-check system (1 minute intervals)');
-        
-        autoCheckIntervalRef.current = setInterval(async () => {
-            if (!isLiveMode) {
-                console.log('🚫 Skipping auto-check (not in live mode)');
-                return;
-            }
-            
-            const checkTime = new Date().toLocaleTimeString('vi-VN');
-            console.log(`⏰ Enhanced auto-check triggered at ${checkTime}`);
-            
-            setLastAutoCheck(new Date());
-            setAutoCheckStatus('Đang kiểm tra...');
-            
+        for (const update of updates) {
+            if (isUnmountedRef.current) break;
+
             try {
-                await performEnhancedAutoCheck();
+                const { error } = await supabase
+                    .from('bills')
+                    .update({
+                        state: update.newState,
+                        visit: update.newVisit
+                    })
+                    .eq('id', update.id);
+
+                if (!error) {
+                    successCount++;
+                    console.log(`✅ ${update.type}: Bill ${update.id} - ${update.reason}`);
+                }
             } catch (error) {
-                console.error('❌ Enhanced auto-check failed:', error);
-                setAutoCheckStatus('✗ Lỗi kiểm tra');
-                setTimeout(() => setAutoCheckStatus(''), 5000);
+                console.error(`❌ Update error ${update.id}:`, error);
             }
-            
-        }, 60000); // 1 phút
-    };
-
-    const stopAutoCheck = () => {
-        if (autoCheckIntervalRef.current) {
-            console.log('🛑 Stopping enhanced auto-check system');
-            clearInterval(autoCheckIntervalRef.current);
-            autoCheckIntervalRef.current = null;
         }
-    };
 
-    const performEnhancedAutoCheck = async () => {
+        return successCount;
+    }, []);
+
+    const performBusinessLogicChecks = useCallback(async (bills, referenceTime) => {
+        const updates = [];
+
+        for (const bill of bills) {
+            if (bill.state !== BILL_STATE.IN_ORDER) continue;
+
+            const billTime = new Date(bill.time);
+            const minutesDiff = Math.floor((referenceTime.getTime() - billTime.getTime()) / 60000);
+
+            // Auto-checkout: Sau 40p từ thời gian đặt (cho khách đang ngồi)
+            if (bill.visit === VISIT_STATUS.VISITED &&
+                minutesDiff > BUSINESS_RULES.autoCheckoutAfterMinutes) {
+                updates.push({
+                    id: bill.id,
+                    newState: BILL_STATE.COMPLETED,
+                    newVisit: VISIT_STATUS.VISITED,
+                    reason: `Auto-checkout after ${BUSINESS_RULES.autoCheckoutAfterMinutes}m`,
+                    type: 'auto-checkout'
+                });
+            }
+            // Timeout đặt bàn: Quá 40p không check-in
+            else if (bill.visit === VISIT_STATUS.ON_PROCESS &&
+                minutesDiff > BUSINESS_RULES.autoCheckoutAfterMinutes) {
+                updates.push({
+                    id: bill.id,
+                    newState: BILL_STATE.CANCELLED,
+                    newVisit: VISIT_STATUS.UN_VISITED,
+                    reason: `Reservation timeout after ${BUSINESS_RULES.autoCheckoutAfterMinutes}m`,
+                    type: 'reservation-timeout'
+                });
+            }
+        }
+
+        return await applyDatabaseUpdates(updates);
+    }, [applyDatabaseUpdates]);
+
+    const performAutoCheck = useCallback(async () => {
+        if (isUnmountedRef.current) return;
+
         try {
-            console.log('🔍 Performing enhanced auto-check with new logic...');
-            
-            const currentStatus = getCurrentTableStatus();
-            const now = new Date();
-            
-            // Lấy tất cả bills để kiểm tra
-            const { data: allBills, error: billError } = await supabase
+            updateState({ autoCheckStatus: 'Kiểm tra...' });
+
+            const { data: allBills, error } = await supabase
                 .from('bills')
                 .select('*');
 
-            if (billError) {
-                throw new Error('Failed to fetch bills: ' + billError.message);
+            if (error) throw new Error('Failed to fetch bills');
+
+            const businessFixes = await performBusinessLogicChecks(allBills, new Date());
+
+            if (!isUnmountedRef.current) {
+                await refreshTableData();
+
+                const statusText = businessFixes > 0 ? `✓ ${businessFixes} cập nhật` : '✓ Hoạt động';
+                updateState({
+                    businessFixes,
+                    autoCheckStatus: statusText
+                });
+
+                setTimeout(() => {
+                    if (!isUnmountedRef.current) {
+                        updateState({ autoCheckStatus: '' });
+                    }
+                }, BUSINESS_RULES.statusUpdateDelay);
             }
 
-            console.log(`📊 Found ${allBills.length} total bills to analyze`);
-            
-            // Enhanced business logic checks
-            const businessFixCount = await performEnhancedBusinessLogicChecks(allBills, now);
-            setBusinessFixes(businessFixCount);
-            
-            // Data inconsistency fixes
-            const dataFixCount = await checkAndFixDataInconsistency(allBills);
-            setDataFixes(dataFixCount);
-            
-            // Lấy trạng thái mới
-            const tablesResult = await getTablesWithBillStatus();
-            if (!tablesResult.success) {
-                throw new Error('Failed to get updated table status');
-            }
-            
-            const newTables = tablesResult.data;
-            const newStatus = getTableStatusFromData(newTables);
-            
-            const changes = compareTableStatus(currentStatus, newStatus);
-            setStatusChanges(changes.total);
-            
-            setTables(newTables);
-            
-            const totalActions = dataFixCount + businessFixCount;
-            let statusText;
-            
-            if (changes.total > 0 && totalActions > 0) {
-                statusText = `✓ ${changes.total} thay đổi, ${totalActions} sửa lỗi`;
-            } else if (changes.total > 0) {
-                statusText = `✓ ${changes.total} thay đổi`;
-            } else if (totalActions > 0) {
-                statusText = `✓ ${totalActions} sửa lỗi`;
-            } else {
-                statusText = '✓ Tất cả ổn định';
-            }
-            
-            setAutoCheckStatus(statusText);
-            
-            logEnhancedAutoCheckResult(changes, dataFixCount, businessFixCount, allBills.length);
-            
-            setTimeout(() => setAutoCheckStatus(''), 15000);
-            
         } catch (error) {
-            console.error('❌ Enhanced auto-check error:', error);
-            setAutoCheckStatus('✗ Lỗi kiểm tra');
-            throw error;
-        }
-    };
-
-    const performEnhancedBusinessLogicChecks = async (bills, referenceTime) => {
-        console.log('⚡ Performing enhanced business logic checks...');
-        let fixCount = 0;
-        const fixes = [];
-
-        const activeBills = bills.filter(bill => bill.state === 'in_order');
-        console.log(`📋 Checking ${activeBills.length} active bills for enhanced business logic`);
-
-        for (const bill of activeBills) {
-            const billTime = new Date(bill.time);
-            const minutesDiff = Math.floor((referenceTime.getTime() - billTime.getTime()) / (1000 * 60));
-
-            // Enhanced Check 1: Auto-checkout occupied tables after 30 minutes from bill time
-            if (bill.visit === 'in_process' && minutesDiff > 30) {
-                fixes.push({
-                    id: bill.id,
-                    currentState: bill.state,
-                    currentVisit: bill.visit,
-                    newState: 'completed',
-                    newVisit: 'visited',
-                    reason: `Auto-checkout after 30 minutes from bill time (${minutesDiff} min)`,
-                    type: 'auto-checkout-30min'
-                });
-                console.log(`🕒 Enhanced Fix: Bill ${bill.id} auto-checkout after ${minutesDiff} minutes from bill time`);
-            }
-            
-            // Enhanced Check 2: Cancel no-show reservations (5 minutes after bill time)
-            else if (bill.visit === 'un_visited' && minutesDiff > 5) {
-                fixes.push({
-                    id: bill.id,
-                    currentState: bill.state,
-                    currentVisit: bill.visit,
-                    newState: 'cancelled',
-                    newVisit: 'un_visited',
-                    reason: `No-show cancellation after 5 minutes past bill time (${minutesDiff} min)`,
-                    type: 'no-show-5min'
-                });
-                console.log(`❌ Enhanced Fix: Bill ${bill.id} no-show cancellation after ${minutesDiff} minutes`);
+            console.error('❌ Auto-check error:', error);
+            if (!isUnmountedRef.current) {
+                updateState({ autoCheckStatus: '✗ Lỗi' });
+                setTimeout(() => {
+                    if (!isUnmountedRef.current) {
+                        updateState({ autoCheckStatus: '' });
+                    }
+                }, BUSINESS_RULES.errorStatusDelay);
             }
         }
+    }, [performBusinessLogicChecks, refreshTableData, updateState]);
 
-        console.log(`📝 Found ${fixes.length} enhanced business logic issues to fix`);
+    const startAutoCheck = useCallback(() => {
+        if (!state.isLiveMode || autoCheckIntervalRef.current || isUnmountedRef.current) return;
 
-        // Thực hiện enhanced fixes
-        for (const fix of fixes) {
-            try {
-                const { error } = await supabase
-                    .from('bills')
-                    .update({
-                        state: fix.newState,
-                        visit: fix.newVisit
-                    })
-                    .eq('id', fix.id);
+        console.log('🤖 Starting auto-check system');
 
-                if (!error) {
-                    fixCount++;
-                    console.log(`✅ Enhanced business fix applied to bill ${fix.id}: ${fix.reason}`);
-                } else {
-                    console.error(`❌ Failed to apply enhanced business fix to bill ${fix.id}:`, error);
-                }
-            } catch (error) {
-                console.error(`❌ Error applying enhanced business fix to bill ${fix.id}:`, error);
+        // Chạy ngay lần đầu
+        updateState({ lastCheck: new Date() });
+        performAutoCheck();
+
+        // Setup interval
+        autoCheckIntervalRef.current = setInterval(async () => {
+            if (isUnmountedRef.current) {
+                clearInterval(autoCheckIntervalRef.current);
+                autoCheckIntervalRef.current = null;
+                return;
             }
-        }
 
-        console.log(`🎯 Enhanced business logic fix completed: ${fixCount}/${fixes.length} successful`);
-        return fixCount;
-    };
+            if (state.isLiveMode) {
+                console.log('🔄 Auto-check tick at:', new Date().toLocaleTimeString());
+                updateState({ lastCheck: new Date() });
+                await performAutoCheck();
+            } else {
+                console.log('🛑 Auto-check stopped - not in live mode');
+                clearInterval(autoCheckIntervalRef.current);
+                autoCheckIntervalRef.current = null;
+            }
+        }, BUSINESS_RULES.autoCheckIntervalMs);
+    }, [state.isLiveMode, performAutoCheck, updateState]);
+
+    const stopAutoCheck = useCallback(() => {
+        if (autoCheckIntervalRef.current) {
+            clearInterval(autoCheckIntervalRef.current);
+            autoCheckIntervalRef.current = null;
+            console.log('🛑 Auto-check stopped');
+        }
+    }, []);
 
     // ===================
-    // ENHANCED UTILITY FUNCTIONS
+    // EVENT HANDLERS
     // ===================
+    const handleDateTimeChange = useCallback((type, value) => {
+        if (type === 'date') {
+            updateState({ showDatePicker: false });
+            if (value) {
+                const newDateTime = new Date(state.selectedDateTime);
+                newDateTime.setFullYear(value.getFullYear(), value.getMonth(), value.getDate());
+                updateState({ selectedDateTime: newDateTime });
+            }
+        } else if (type === 'time') {
+            updateState({ showTimePicker: false });
+            if (value) {
+                const newDateTime = new Date(state.selectedDateTime);
+                newDateTime.setHours(value.getHours(), value.getMinutes(), 0, 0);
+                updateState({ selectedDateTime: newDateTime });
+            }
+        }
+    }, [state.selectedDateTime, updateState]);
 
-    const getUpcomingTablesWithCustomTime = () => {
-        const referenceTime = getCurrentReferenceTime();
-        const futureTime = new Date(referenceTime.getTime() + (10 * 60 * 1000)); // 10 phút tới
-        
-        return tables.filter(table => {
-            if (table.status !== 'reserved' || !table.bill) return false;
-            const billTime = new Date(table.bill.time);
-            return billTime >= referenceTime && billTime <= futureTime;
+    const toggleLiveMode = useCallback(() => {
+        const newIsLiveMode = !state.isLiveMode;
+        console.log('🔄 Toggling live mode:', state.isLiveMode, '→', newIsLiveMode);
+
+        updateState({
+            isLiveMode: newIsLiveMode,
+            selectedDateTime: newIsLiveMode ? new Date() : state.selectedDateTime
         });
-    };
+    }, [state.isLiveMode, state.selectedDateTime, updateState]);
 
-    const getActiveTablesInfo = () => {
-        const referenceTime = getCurrentReferenceTime();
-        const occupiedTables = tables.filter(t => t.status === 'occupied');
-        
-        return {
-            occupied: occupiedTables.length,
-            reserved: tables.filter(t => t.status === 'reserved').length,
-            ready: tables.filter(t => t.status === 'ready').length,
-            empty: tables.filter(t => t.status === 'empty').length,
-            total: tables.length,
-            occupiedDetails: occupiedTables.map(table => {
-                if (table.bill) {
-                    const billTime = new Date(table.bill.time);
-                    const minutesSinceBillTime = Math.floor((referenceTime.getTime() - billTime.getTime()) / (1000 * 60));
-                    return {
-                        id: table.id,
-                        minutesSinceBillTime,
-                        customerName: table.bill.name,
-                        numPeople: table.bill.num_people
-                    };
-                }
-                return null;
-            }).filter(Boolean)
-        };
-    };
+    const handleRefresh = useCallback(async () => {
+        updateState({ refreshing: true });
+        await loadInitialData();
+        updateState({ refreshing: false });
+    }, [loadInitialData, updateState]);
 
-    // ===================
-    // EXISTING FUNCTIONS (giữ nguyên logic cũ)
-    // ===================
-
-    const setupRealtimeSubscription = () => {
-        if (!isLiveMode) {
-            console.log('📡 Realtime disabled in custom time mode');
-            return;
-        }
-        
-        console.log('📡 Setting up realtime subscriptions...');
-        
-        supabase
-            .channel('bills-changes')
-            .on('postgres_changes', { 
-                event: '*', 
-                schema: 'public', 
-                table: 'bills' 
-            }, (payload) => {
-                console.log('💫 Bills change detected:', payload.eventType, 'for bill', payload.new?.id || payload.old?.id);
-                if (isLiveMode) {
-                    refreshTableData();
-                }
-            })
-            .subscribe();
-
-        supabase
-            .channel('detailBills-changes')
-            .on('postgres_changes', { 
-                event: '*', 
-                schema: 'public', 
-                table: 'detailBills' 
-            }, (payload) => {
-                console.log('💫 DetailBills change detected:', payload.eventType);
-                if (isLiveMode) {
-                    refreshTableData();
-                }
-            })
-            .subscribe();
-    };
-
-    const refreshTableData = async () => {
+    const executeTableAction = useCallback(async (action, billId, successMessage) => {
         try {
-            console.log('🔄 Refreshing table data...');
-            if (isLiveMode) {
-                const tablesResult = await getTablesWithBillStatus();
-                if (tablesResult.success) {
-                    setTables(tablesResult.data);
-                    console.log('✅ Tables refreshed (live mode)');
-                }
+            updateState({ selectedTable: null });
+            const result = await action(billId);
+            if (result.success) {
+                Alert.alert('✅ Thành công', successMessage);
+                await loadInitialData();
             } else {
-                await refreshTableDataWithCustomTime();
+                Alert.alert('❌ Lỗi', result.msg || 'Không thể thực hiện thao tác');
             }
         } catch (error) {
-            console.error('❌ Error refreshing table data:', error);
+            console.error('Action error:', error);
+            Alert.alert('❌ Lỗi', 'Không thể thực hiện thao tác');
         }
-    };
+    }, [loadInitialData, updateState]);
 
-    // Auto-check restart khi chuyển mode
-    useEffect(() => {
-        stopAutoCheck();
-        if (isLiveMode) {
-            startAutoCheck();
-        }
-    }, [isLiveMode]);
+    const handleTablePress = useCallback((table) => {
+        updateState({ selectedTable: table.id });
+    }, [updateState]);
 
-    // ... (giữ nguyên tất cả các functions khác: manualAutoCheck, checkAndFixDataInconsistency, 
-    // handleTablePress, handleOccupiedTable, handleReservedTable, handleReadyTable, 
-    // handleEmptyTable, utility functions, v.v.)
-
-    const checkAndFixDataInconsistency = async (bills) => {
-        console.log('🔧 Checking data inconsistency...');
-        let fixCount = 0;
-        const fixes = [];
-
-        for (const bill of bills) {
-            let needsFix = false;
-            let newState = bill.state;
-            let newVisit = bill.visit;
-            let reason = '';
-
-            if (bill.state === 'completed' && bill.visit === 'in_process') {
-                newVisit = 'visited';
-                needsFix = true;
-                reason = 'Completed bill should be visited, not in_process';
-            } else if (bill.state === 'cancelled' && bill.visit === 'in_process') {
-                newVisit = 'un_visited';
-                needsFix = true;
-                reason = 'Cancelled bill should be un_visited, not in_process';
-            } else if (bill.state === 'in_order' && bill.visit === 'visited') {
-                newState = 'completed';
-                needsFix = true;
-                reason = 'Visited bill should be completed, not in_order';
-            }
-
-            if (needsFix) {
-                fixes.push({
-                    id: bill.id,
-                    currentState: bill.state,
-                    currentVisit: bill.visit,
-                    newState: newState,
-                    newVisit: newVisit,
-                    reason: reason
-                });
-            }
-        }
-
-        for (const fix of fixes) {
-            try {
-                const { error } = await supabase
-                    .from('bills')
-                    .update({
-                        state: fix.newState,
-                        visit: fix.newVisit
-                    })
-                    .eq('id', fix.id);
-
-                if (!error) {
-                    fixCount++;
-                    console.log(`✅ Fixed bill ${fix.id}: ${fix.reason}`);
-                }
-            } catch (error) {
-                console.error(`❌ Error fixing bill ${fix.id}:`, error);
-            }
-        }
-
-        return fixCount;
-    };
-
-    const manualAutoCheck = async () => {
-        setRefreshing(true);
-        setAutoCheckStatus('Kiểm tra thủ công...');
-        
-        try {
-            const beforeCounts = getStatusCounts();
-            
-            if (isLiveMode) {
-                await performEnhancedAutoCheck();
-            } else {
-                await refreshTableDataWithCustomTime();
-            }
-            
-            const afterCounts = getStatusCounts();
-            const changes = calculateStatusChanges(beforeCounts, afterCounts);
-            const totalStatusChanges = Object.values(changes).reduce((sum, val) => sum + Math.abs(val), 0);
-            
-            let message = `🔍 Kết quả kiểm tra (${formatSelectedDateTime()}):\n\n`;
-            
-            message += '📊 TRẠNG THÁI BÀN:\n';
-            message += `🔴 Có khách: ${afterCounts.occupied} (${formatChange(changes.occupied)})\n`;
-            message += `🟠 Đã đặt: ${afterCounts.reserved} (${formatChange(changes.reserved)})\n`;
-            message += `🟡 Sẵn sàng: ${afterCounts.ready} (${formatChange(changes.ready)})\n`;
-            message += `🟢 Trống: ${afterCounts.empty} (${formatChange(changes.empty)})\n\n`;
-            
-            if (isLiveMode) {
-                message += '🔧 SỬA LỖI ĐÃ THỰC HIỆN:\n';
-                message += `📝 Sửa dữ liệu: ${dataFixes} lỗi\n`;
-                message += `⚡ Logic nghiệp vụ: ${businessFixes} hành động\n\n`;
-                
-                const totalActions = dataFixes + businessFixes;
-                if (totalStatusChanges > 0 && totalActions > 0) {
-                    message += `✨ Tổng kết: ${totalStatusChanges} thay đổi, ${totalActions} sửa lỗi`;
-                } else if (totalStatusChanges > 0) {
-                    message += `✨ Tổng kết: ${totalStatusChanges} thay đổi`;
-                } else if (totalActions > 0) {
-                    message += `✨ Tổng kết: ${totalActions} lỗi đã được sửa`;
-                } else {
-                    message += '✨ Tổng kết: Tất cả đều ổn định';
-                }
-            } else {
-                message += '⏰ Chế độ thời gian tùy chỉnh - Chỉ hiển thị trạng thái theo thời gian đã chọn';
-            }
-            
-            Alert.alert(
-                isLiveMode && (totalStatusChanges > 0 || (dataFixes + businessFixes) > 0) ? '✅ Có cập nhật' : '✅ Hoàn tất',
-                message
-            );
-            
-        } catch (error) {
-            Alert.alert('❌ Lỗi', 'Không thể thực hiện kiểm tra');
-        }
-        
-        setRefreshing(false);
-    };
-
-    // ... (tất cả utility functions khác giữ nguyên)
-
-    const getCurrentTableStatus = () => {
-        const status = {};
-        tables.forEach(table => {
-            status[table.id] = table.status;
-        });
-        return status;
-    };
-
-    const getTableStatusFromData = (tablesData) => {
-        const status = {};
-        tablesData.forEach(table => {
-            status[table.id] = table.status;
-        });
-        return status;
-    };
-
-    const compareTableStatus = (current, newStatus) => {
-        const changes = { details: [], total: 0 };
-        
-        Object.keys(newStatus).forEach(tableId => {
-            if (current[tableId] !== newStatus[tableId]) {
-                changes.details.push({
-                    tableId,
-                    from: current[tableId] || 'unknown',
-                    to: newStatus[tableId]
-                });
-                changes.total++;
-            }
-        });
-        
-        return changes;
-    };
-
-    const getStatusCounts = () => {
-        return {
-            occupied: tables.filter(t => t.status === 'occupied').length,
-            reserved: tables.filter(t => t.status === 'reserved').length,
-            ready: tables.filter(t => t.status === 'ready').length,
-            empty: tables.filter(t => t.status === 'empty').length,
-            total: tables.length
-        };
-    };
-
-    const calculateStatusChanges = (before, after) => {
-        return {
-            occupied: after.occupied - before.occupied,
-            reserved: after.reserved - before.reserved,
-            ready: after.ready - before.ready,
-            empty: after.empty - before.empty
-        };
-    };
-
-    const formatChange = (change) => {
-        if (change === 0) return 'không đổi';
-        return change > 0 ? `+${change}` : `${change}`;
-    };
-
-    const formatLastCheck = () => {
-        const diff = Math.floor((new Date() - lastAutoCheck) / 1000);
-        if (diff < 60) return `${diff}s`;
-        return `${Math.floor(diff / 60)}m`;
-    };
-
-    const getTablesByFloor = (floor) => {
-        return tables
-            .filter(table => table.floor === floor)
-            .sort((a, b) => a.id - b.id);
-    };
-
-    const logEnhancedAutoCheckResult = (changes, dataFixCount, businessFixCount, totalBills) => {
-        const time = new Date().toLocaleTimeString('vi-VN');
-        console.log(`\n📋 ===== ENHANCED AUTO-CHECK RESULT at ${time} =====`);
-        console.log(`📊 Total bills analyzed: ${totalBills}`);
-        console.log(`🔄 Table status changes: ${changes.total}`);
-        console.log(`🔧 Data inconsistency fixes: ${dataFixCount}`);
-        console.log(`⚡ Enhanced business logic actions: ${businessFixCount}`);
-        console.log(`✨ Total actions performed: ${changes.total + dataFixCount + businessFixCount}`);
-        
-        if (changes.details.length > 0) {
-            console.log('📝 Status change details:');
-            changes.details.forEach(change => {
-                console.log(`   • Table ${change.tableId}: ${change.from} → ${change.to}`);
-            });
-        }
-        console.log(`===== ENHANCED AUTO-CHECK COMPLETED =====\n`);
-    };
-
-    // ... (tất cả handle functions giữ nguyên)
-
-    const handleTablePress = (table) => {
-        setSelectedTable(table.id);
-        
-        console.log('🔘 Table pressed:', {
-            id: table.id,
-            status: table.status,
-            billId: table.bill?.id,
-            billState: table.bill?.state,
-            billVisit: table.bill?.visit,
-            billTime: table.bill?.time,
-            referenceTime: getCurrentReferenceTime().toLocaleString()
-        });
-
-        switch (table.status) {
-            case 'occupied':
-                handleOccupiedTable(table);
-                break;
-            case 'reserved':
-                handleReservedTable(table);
-                break;
-            case 'ready':
-                handleReadyTable(table);
-                break;
-            case 'empty':
-            default:
-                handleEmptyTable(table);
-                break;
-        }
-    };
-
-    const handleOccupiedTable = (table) => {
-        const billTime = new Date(table.bill.time);
-        const referenceTime = getCurrentReferenceTime();
-        const minutesSinceBillTime = Math.floor((referenceTime.getTime() - billTime.getTime()) / (1000 * 60));
-
-        Alert.alert(
-            '🔴 Bàn đang có khách',
-            `Bàn ${table.id} - ${table.bill.name || 'Khách hàng'}\n👥 ${table.bill.num_people} người\n⏰ Giờ đặt: ${billTime.toLocaleTimeString('vi-VN')}\n🕐 Đã sử dụng: ${minutesSinceBillTime} phút\n📋 Trạng thái: Đang phục vụ`,
-            [
-                { text: 'Hủy', style: 'cancel', onPress: () => setSelectedTable(null) },
-                {
-                    text: '✅ Check-out',
-                    onPress: async () => {
-                        try {
-                            const result = await checkoutCustomer(table.bill.id);
-                            if (result.success) {
-                                Alert.alert('✅ Thành công', 'Đã checkout cho khách');
-                                await refreshTableData();
-                            } else {
-                                Alert.alert('❌ Lỗi', result.msg || 'Không thể checkout');
-                            }
-                        } catch (error) {
-                            Alert.alert('❌ Lỗi', 'Không thể checkout');
-                        }
-                        setSelectedTable(null);
-                    }
-                },
-                {
-                    text: '📄 Chi tiết',
-                    onPress: () => {
-                        router.push({
-                            pathname: '/main/billDetailScr',
-                            params: { billId: table.bill.id }
-                        });
-                        setSelectedTable(null);
-                    }
-                }
-            ]
-        );
-    };
-
-    const handleReservedTable = (table) => {
-        const billTime = new Date(table.bill.time);
-        const referenceTime = getCurrentReferenceTime();
-        const minutesUntil = Math.floor((billTime.getTime() - referenceTime.getTime()) / (1000 * 60));
-        
-        Alert.alert(
-            '🟠 Bàn đã được đặt',
-            `Bàn ${table.id} đã được đặt cho:\n👤 ${table.bill.name || 'Khách hàng'}\n👥 ${table.bill.num_people} người\n⏰ Thời gian đặt: ${billTime.toLocaleTimeString('vi-VN')}\n⏳ Còn ${minutesUntil} phút nữa`,
-            [
-                { text: 'OK', onPress: () => setSelectedTable(null) },
-                {
-                    text: '❌ Hủy đặt',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            const result = await cancelReservation(table.bill.id);
-                            if (result.success) {
-                                Alert.alert('✅ Thành công', 'Đã hủy đặt bàn');
-                                await refreshTableData();
-                            } else {
-                                Alert.alert('❌ Lỗi', result.msg || 'Không thể hủy đặt bàn');
-                            }
-                        } catch (error) {
-                            Alert.alert('❌ Lỗi', 'Không thể hủy đặt bàn');
-                        }
-                        setSelectedTable(null);
-                    }
-                },
-                {
-                    text: '📄 Chi tiết',
-                    onPress: () => {
-                        router.push({
-                            pathname: '/main/billDetailScr',
-                            params: { billId: table.bill.id }
-                        });
-                        setSelectedTable(null);
-                    }
-                }
-            ]
-        );
-    };
-
-    const handleReadyTable = (table) => {
-        const billTime = new Date(table.bill.time);
-        const referenceTime = getCurrentReferenceTime();
-        const minutesLate = Math.floor((referenceTime.getTime() - billTime.getTime()) / (1000 * 60));
-
-        Alert.alert(
-            '🟡 Khách đã đến giờ',
-            `Bàn ${table.id} - ${table.bill.name || 'Khách hàng'}\n👥 ${table.bill.num_people} người\n⏰ Giờ đặt: ${billTime.toLocaleTimeString('vi-VN')}\n⏳ Đã muộn: ${minutesLate} phút\n🎯 Sẵn sàng checkin!`,
-            [
-                { text: 'Hủy', style: 'cancel', onPress: () => setSelectedTable(null) },
-                {
-                    text: '✅ Check-in',
-                    onPress: async () => {
-                        try {
-                            const result = await checkinCustomer(table.bill.id);
-                            if (result.success) {
-                                Alert.alert('✅ Thành công', 'Đã checkin cho khách');
-                                await refreshTableData();
-                            } else {
-                                Alert.alert('❌ Lỗi', result.msg || 'Không thể checkin');
-                            }
-                        } catch (error) {
-                            Alert.alert('❌ Lỗi', 'Không thể checkin');
-                        }
-                        setSelectedTable(null);
-                    }
-                },
-                {
-                    text: '📄 Chi tiết',
-                    onPress: () => {
-                        router.push({
-                            pathname: '/main/billDetailScr',
-                            params: { billId: table.bill.id }
-                        });
-                        setSelectedTable(null);
-                    }
-                }
-            ]
-        );
-    };
-
-    const handleEmptyTable = (table) => {
-        Alert.alert(
-            '🟢 Bàn trống',
-            `Bàn số ${table.id} (Tầng ${table.floor}) đang trống.\n🎯 Sẵn sàng phục vụ khách mới!`,
-            [
-                { text: 'Hủy', style: 'cancel', onPress: () => setSelectedTable(null) },
-                {
-                    text: '➕ Tạo đơn mới',
-                    onPress: () => {
-                        router.push({
-                            pathname: '/main/createBillScr',
-                            params: { tableId: table.id }
-                        });
-                        setSelectedTable(null);
-                    }
-                }
-            ]
-        );
-    };
+    const handleCloseModal = useCallback(() => {
+        updateState({ selectedTable: null });
+    }, [updateState]);
 
     // ===================
-    // RENDER FUNCTIONS
+    // RENDER COMPONENTS
     // ===================
+    const DateTimeControls = useMemo(() => (
+        <View style={styles.dateTimeControls}>
+            <Pressable
+                style={[styles.modeToggle, state.isLiveMode && styles.modeToggleActive]}
+                onPress={toggleLiveMode}
+            >
+                <MaterialIcons
+                    name={state.isLiveMode ? "access-time" : "schedule"}
+                    size={14}
+                    color={state.isLiveMode ? 'white' : theme.colors.text}
+                />
+                <Text style={[styles.modeToggleText, state.isLiveMode && styles.modeToggleTextActive]}>
+                    {state.isLiveMode ? 'LIVE' : 'Tùy chỉnh'}
+                </Text>
+            </Pressable>
 
-    const renderDateTimeControls = () => {
-        return (
-            <View style={styles.dateTimeControls}>
-                <Pressable 
-                    style={[styles.modeToggle, isLiveMode && styles.modeToggleActive]}
-                    onPress={toggleLiveMode}
-                >
-                    <MaterialIcons 
-                        name={isLiveMode ? "access-time" : "schedule"} 
-                        size={16} 
-                        color={isLiveMode ? 'white' : theme.colors.text} 
-                    />
-                    <Text style={[styles.modeToggleText, isLiveMode && styles.modeToggleTextActive]}>
-                        {isLiveMode ? 'LIVE' : 'Tùy chỉnh'}
-                    </Text>
-                </Pressable>
+            {!state.isLiveMode && (
+                <View style={styles.customTimeControls}>
+                    <Pressable
+                        style={styles.dateTimeButton}
+                        onPress={() => updateState({ showDatePicker: true })}
+                    >
+                        <MaterialIcons name="calendar-today" size={14} color={theme.colors.text} />
+                        <Text style={styles.dateTimeButtonText}>
+                            {state.selectedDateTime.toLocaleDateString('vi-VN')}
+                        </Text>
+                    </Pressable>
 
-                {!isLiveMode && (
-                    <View style={styles.customTimeControls}>
-                        <Pressable style={styles.dateTimeButton} onPress={() => setShowDatePicker(true)}>
-                            <MaterialIcons name="calendar-today" size={16} color={theme.colors.text} />
-                            <Text style={styles.dateTimeButtonText}>
-                                {selectedDateTime.toLocaleDateString('vi-VN')}
+                    <Pressable
+                        style={styles.dateTimeButton}
+                        onPress={() => updateState({ showTimePicker: true })}
+                    >
+                        <MaterialIcons name="access-time" size={14} color={theme.colors.text} />
+                        <Text style={styles.dateTimeButtonText}>
+                            {state.selectedDateTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                    </Pressable>
+                </View>
+            )}
+
+            {state.isLiveMode && (
+                <Text style={styles.liveTimeDisplay}>
+                    {new Date().toLocaleString('vi-VN', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit'
+                    })}
+                </Text>
+            )}
+        </View>
+    ), [state.isLiveMode, state.selectedDateTime, toggleLiveMode, updateState]);
+
+    const StatsBar = useMemo(() => (
+        <View style={styles.statsBar}>
+            <MaterialIcons name="dashboard" size={16} color={theme.colors.text} />
+            <Text style={styles.statsText}>
+                {formattedDateTime}: {tableStats[TABLE_STATUS.OCCUPIED] + tableStats[TABLE_STATUS.RESERVED]}/{tableStats.total} bàn hoạt động
+            </Text>
+        </View>
+    ), [formattedDateTime, tableStats]);
+
+    const FloorTabs = useMemo(() => (
+        <View style={styles.floorTabsContainer}>
+            <FlatList
+                data={state.floors}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                renderItem={({ item: floor, index }) => {
+                    const floorTables = tablesByFloor[floor] || [];
+                    const activeCount = floorTables.filter(t =>
+                        [TABLE_STATUS.OCCUPIED, TABLE_STATUS.RESERVED].includes(t.status)
+                    ).length;
+
+                    return (
+                        <Pressable
+                            style={[
+                                styles.floorTab,
+                                state.currentFloor === index && styles.activeFloorTab
+                            ]}
+                            onPress={() => {
+                                updateState({ currentFloor: index, selectedTable: null });
+                                pagerRef.current?.setPage(index);
+                            }}
+                        >
+                            <Text style={[
+                                styles.floorTabText,
+                                state.currentFloor === index && styles.activeFloorTabText
+                            ]}>
+                                Tầng {floor}
+                            </Text>
+                            <Text style={[
+                                styles.floorTabCount,
+                                state.currentFloor === index && styles.activeFloorTabCount
+                            ]}>
+                                {activeCount}/{floorTables.length}
                             </Text>
                         </Pressable>
+                    );
+                }}
+                keyExtractor={(item) => item.toString()}
+                contentContainerStyle={styles.floorTabsList}
+            />
+        </View>
+    ), [state.floors, state.currentFloor, tablesByFloor, updateState]);
 
-                        <Pressable style={styles.dateTimeButton} onPress={() => setShowTimePicker(true)}>
-                            <MaterialIcons name="access-time" size={16} color={theme.colors.text} />
-                            <Text style={styles.dateTimeButtonText}>
-                                {selectedDateTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                            </Text>
-                        </Pressable>
-                    </View>
-                )}
-            </View>
-        );
-    };
-
-    const renderFloorPage = (floor) => {
-        const floorTables = getTablesByFloor(floor);
+    const FloorPage = useCallback(({ floor }) => {
+        const floorTables = tablesByFloor[floor] || [];
         const floorStats = {
-            occupied: floorTables.filter(t => t.status === 'occupied').length,
-            reserved: floorTables.filter(t => t.status === 'reserved').length,
-            ready: floorTables.filter(t => t.status === 'ready').length,
-            empty: floorTables.filter(t => t.status === 'empty').length
+            [TABLE_STATUS.OCCUPIED]: 0,
+            [TABLE_STATUS.RESERVED]: 0,
+            [TABLE_STATUS.EMPTY]: 0
         };
+        floorTables.forEach(table => {
+            if (table.status) {
+                floorStats[table.status]++;
+            }
+        });
 
         return (
-            <View key={floor} style={styles.floorContainer}>
+            <View style={styles.floorContainer}>
                 <FlatList
                     data={floorTables}
                     renderItem={({ item }) => (
                         <MyTableItem
                             item={item}
                             tableClick={handleTablePress}
-                            isSelected={selectedTable === item.id}
+                            isSelected={state.selectedTable === item.id}
                         />
                     )}
                     numColumns={3}
@@ -1000,193 +613,337 @@ const tableManageScr = () => {
                     contentContainerStyle={styles.tablesList}
                     refreshControl={
                         <RefreshControl
-                            refreshing={refreshing}
-                            onRefresh={onRefresh}
+                            refreshing={state.refreshing}
+                            onRefresh={handleRefresh}
                             colors={[theme.colors.primary]}
                         />
+                    }
+                    ListHeaderComponent={
+                        <View style={styles.floorStats}>
+                            {Object.values(TABLE_STATUS).map(status => {
+                                const config = TABLE_STATUS_CONFIG[status];
+                                return (
+                                    <View key={status} style={styles.statItem}>
+                                        <Text style={[styles.statNumber, { color: config.color }]}>
+                                            {floorStats[status]}
+                                        </Text>
+                                        <Text style={styles.statLabel}>{config.text}</Text>
+                                    </View>
+                                );
+                            })}
+                        </View>
                     }
                     ListEmptyComponent={
                         <View style={styles.emptyFloor}>
                             <MaterialIcons name="restaurant" size={60} color={theme.colors.textLight} />
-                            <Text style={styles.emptyFloorText}>
-                                Tầng {floor} chưa có bàn nào
-                            </Text>
-                        </View>
-                    }
-                    ListHeaderComponent={
-                        <View style={styles.floorStats}>
-                            <View style={styles.statItem}>
-                                <Text style={[styles.statNumber, { color: '#ff4757' }]}>
-                                    {floorStats.occupied}
-                                </Text>
-                                <Text style={styles.statLabel}>Có khách</Text>
-                            </View>
-                            <View style={styles.statItem}>
-                                <Text style={[styles.statNumber, { color: '#ffa502' }]}>
-                                    {floorStats.reserved}
-                                </Text>
-                                <Text style={styles.statLabel}>Đã đặt</Text>
-                            </View>
-                            <View style={styles.statItem}>
-                                <Text style={[styles.statNumber, { color: '#ff6b6b' }]}>
-                                    {floorStats.ready}
-                                </Text>
-                                <Text style={styles.statLabel}>Sẵn sàng</Text>
-                            </View>
-                            <View style={styles.statItem}>
-                                <Text style={[styles.statNumber, { color: '#2ed573' }]}>
-                                    {floorStats.empty}
-                                </Text>
-                                <Text style={styles.statLabel}>Trống</Text>
-                            </View>
+                            <Text style={styles.emptyFloorText}>Tầng {floor} chưa có bàn nào</Text>
                         </View>
                     }
                 />
             </View>
         );
-    };
+    }, [tablesByFloor, handleTablePress, state.selectedTable, state.refreshing, handleRefresh]);
+
+    const TableActionModal = useMemo(() => {
+        if (!state.selectedTable) return null;
+
+        const table = state.tables.find(t => t.id === state.selectedTable);
+        if (!table) return null;
+
+        const billTime = table.bill ? new Date(table.bill.time) : null;
+        const minutesDiff = billTime ? Math.floor((currentReferenceTime.getTime() - billTime.getTime()) / 60000) : 0;
+        const statusConfig = TABLE_STATUS_CONFIG[table.status];
+
+        const getDisplayStatus = () => {
+            if (!table.bill) return 'Bàn trống';
+
+            if (table.bill.state === BILL_STATE.IN_ORDER && table.bill.visit === VISIT_STATUS.ON_PROCESS) {
+                return `Đặt bàn (${-minutesDiff > 0 ? `${-minutesDiff}p nữa` : `trễ ${minutesDiff}p`})`;
+            }
+            if (table.bill.state === BILL_STATE.IN_ORDER && table.bill.visit === VISIT_STATUS.VISITED) {
+                return `Có khách (${minutesDiff}p)`;
+            }
+            return 'Trạng thái khác';
+        };
+
+        return (
+            <Modal
+                visible={true}
+                transparent
+                animationType="slide"
+                onRequestClose={handleCloseModal}
+            >
+                <Pressable style={styles.modalOverlay} onPress={handleCloseModal}>
+                    <View style={styles.modalContent}>
+                        {/* Header */}
+                        <View style={[styles.modalHeader, { backgroundColor: statusConfig.bgColor }]}>
+                            <View style={styles.modalHeaderLeft}>
+                                <MaterialIcons
+                                    name={statusConfig.icon}
+                                    size={24}
+                                    color={statusConfig.color}
+                                />
+                                <View style={styles.modalTitleContainer}>
+                                    <Text style={[styles.modalTitle, { color: statusConfig.color }]}>
+                                        Bàn {table.id} - {statusConfig.text}
+                                    </Text>
+                                    <Text style={styles.modalSubtitle}>
+                                        Tầng {table.floor} • {getDisplayStatus()}
+                                    </Text>
+                                </View>
+                            </View>
+                            <Pressable style={styles.closeButton} onPress={handleCloseModal}>
+                                <MaterialIcons name="close" size={20} color={theme.colors.textLight} />
+                            </Pressable>
+                        </View>
+
+                        {/* Content */}
+                        <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+                            {table.bill ? (
+                                <>
+                                    <View style={styles.customerInfo}>
+                                        <Text style={styles.customerName}>
+                                            👤 {table.bill.name || 'Khách hàng'}
+                                        </Text>
+                                        <Text style={styles.customerDetails}>
+                                            👥 {table.bill.num_people} người
+                                        </Text>
+                                        <Text style={styles.customerDetails}>
+                                            ⏰ Đặt lúc: {billTime?.toLocaleString('vi-VN')}
+                                        </Text>
+                                    </View>
+
+                                    <View style={styles.statusInfo}>
+                                        <Text style={styles.statusLabel}>Chi tiết trạng thái:</Text>
+                                        <View style={styles.statusRow}>
+                                            <Text style={styles.statusDetail}>
+                                                📋 State: {table.bill.state}
+                                            </Text>
+                                            <Text style={styles.statusDetail}>
+                                                👥 Visit: {table.bill.visit}
+                                            </Text>
+                                        </View>
+
+                                        <Text style={styles.timeInfo}>
+                                            ⏱️ Logic: {table.bill.state} + {table.bill.visit} = {table.status?.toUpperCase()}
+                                        </Text>
+
+                                        <Text style={styles.timeInfo}>
+                                            🕐 Thời gian: {minutesDiff >= 0 ? `${minutesDiff}p từ lúc đặt` : `${-minutesDiff}p nữa đến giờ`}
+                                        </Text>
+                                    </View>
+                                </>
+                            ) : (
+                                <View style={styles.emptyTableInfo}>
+                                    <MaterialIcons name="restaurant" size={40} color={theme.colors.textLight} />
+                                    <Text style={styles.emptyTableText}>
+                                        Bàn hiện đang trống
+                                    </Text>
+                                    <Text style={styles.emptyTableSubText}>
+                                        Sẵn sàng phục vụ khách hàng mới
+                                    </Text>
+                                </View>
+                            )}
+                        </ScrollView>
+
+                        {/* Actions */}
+                        <View style={styles.modalActions}>
+                            {table.status === TABLE_STATUS.RESERVED && (
+                                <>
+                                    <Pressable
+                                        style={[styles.actionButton, styles.checkinButton]}
+                                        onPress={() => executeTableAction(checkinCustomer, table.bill.id, 'Khách đã check-in')}
+                                    >
+                                        <MaterialIcons name="login" size={18} color="white" />
+                                        <Text style={styles.actionButtonText}>Check-in</Text>
+                                    </Pressable>
+                                    <Pressable
+                                        style={[styles.actionButton, styles.cancelButton]}
+                                        onPress={() => executeTableAction(cancelReservation, table.bill.id, 'Đã hủy đặt bàn')}
+                                    >
+                                        <MaterialIcons name="cancel" size={18} color="white" />
+                                        <Text style={styles.actionButtonText}>Hủy đặt</Text>
+                                    </Pressable>
+                                </>
+                            )}
+
+                            {table.status === TABLE_STATUS.OCCUPIED && (
+                                <>
+                                    <Pressable
+                                        style={[styles.actionButton, styles.checkoutButton]}
+                                        onPress={() => executeTableAction(checkoutCustomer, table.bill.id, 'Khách đã checkout')}
+                                    >
+                                        <MaterialIcons name="check-circle" size={18} color="white" />
+                                        <Text style={styles.actionButtonText}>Check-out</Text>
+                                    </Pressable>
+                                    <Pressable
+                                        style={[styles.actionButton, styles.detailButton]}
+                                        onPress={() => {
+                                            handleCloseModal();
+                                            router.push({ pathname: '../assignTableScr', params: { billId: table.bill.id } });
+                                        }}
+                                    >
+                                        <MaterialIcons name="info" size={18} color={theme.colors.primary} />
+                                        <Text style={[styles.actionButtonText, { color: theme.colors.primary }]}>Cập nhật đơn</Text>
+                                    </Pressable>
+                                </>
+                            )}
+
+                            {table.status === TABLE_STATUS.EMPTY && (
+                                <Pressable
+                                    style={[styles.actionButton, styles.createButton]}
+                                    onPress={() => {
+                                        handleCloseModal();
+                                        router.push({ pathname: '../assignTableScr', params: { tableId: table.id } });
+                                    }}
+                                >
+                                    <MaterialIcons name="add-circle" size={18} color="white" />
+                                    <Text style={styles.actionButtonText}>Tạo đơn mới</Text>
+                                </Pressable>
+                            )}
+                        </View>
+                    </View>
+                </Pressable>
+            </Modal>
+        );
+    }, [state.selectedTable, state.tables, currentReferenceTime, executeTableAction, router, handleCloseModal]);
+
+    const StatusLegend = useMemo(() => (
+        <View style={styles.legend}>
+            <Text style={styles.legendTitle}>
+                Logic: in_order+on_process=đặt, in_order+visited=có khách, completed/cancelled=trống
+            </Text>
+            <View style={styles.legendItems}>
+                {Object.values(TABLE_STATUS).map(status => {
+                    const config = TABLE_STATUS_CONFIG[status];
+                    const rule = status === TABLE_STATUS.RESERVED ? ' (10p trước)' :
+                        status === TABLE_STATUS.OCCUPIED ? ' (40p tối đa)' : '';
+
+                    return (
+                        <View key={status} style={styles.legendItem}>
+                            <View style={[styles.legendColor, { backgroundColor: config.color }]} />
+                            <Text style={styles.legendText}>{config.text}{rule}</Text>
+                        </View>
+                    );
+                })}
+            </View>
+        </View>
+    ), []);
+
+    // ===================
+    // EFFECTS
+    // ===================
+    useEffect(() => {
+        isUnmountedRef.current = false;
+        loadInitialData();
+
+        return () => {
+            isUnmountedRef.current = true;
+            if (channelRef.current) {
+                channelRef.current.unsubscribe();
+                channelRef.current = null;
+            }
+            stopAutoCheck();
+        };
+    }, [loadInitialData, stopAutoCheck]);
+
+    // Refresh khi thay đổi thời gian (chỉ khi không phải live mode)
+    useEffect(() => {
+        if (!state.isLiveMode && !isUnmountedRef.current) {
+            refreshTableData();
+        }
+    }, [state.selectedDateTime, state.isLiveMode, refreshTableData]);
+
+    // Setup auto-check và real-time khi chuyển về live mode
+    useEffect(() => {
+        console.log('🔧 Setting up live mode:', state.isLiveMode);
+
+        // Clean up previous setup
+        stopAutoCheck();
+        if (channelRef.current) {
+            channelRef.current.unsubscribe();
+            channelRef.current = null;
+        }
+
+        if (state.isLiveMode && !isUnmountedRef.current) {
+            // Refresh ngay khi chuyển về live mode
+            refreshTableData();
+
+            // Start auto-check
+            startAutoCheck();
+
+            // Setup real-time subscription
+            channelRef.current = supabase
+                .channel('bills-changes')
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'bills'
+                }, (payload) => {
+                    console.log('📡 Real-time update received:', payload.eventType);
+                    if (state.isLiveMode && !isUnmountedRef.current) {
+                        refreshTableData();
+                    }
+                })
+                .subscribe();
+
+            console.log('📡 Real-time subscription active');
+        }
+
+        return () => {
+            if (channelRef.current) {
+                channelRef.current.unsubscribe();
+                channelRef.current = null;
+            }
+        };
+    }, [state.isLiveMode, startAutoCheck, stopAutoCheck, refreshTableData]);
 
     // ===================
     // MAIN RENDER
     // ===================
-
-    if (loading) {
+    if (state.loading) {
         return (
             <ScreenWrapper bg={'#FFBF00'}>
-                <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <View style={[styles.container, styles.centerContent]}>
                     <MaterialIcons name="restaurant" size={60} color={theme.colors.text} />
                     <Text style={styles.loadingText}>Đang tải dữ liệu bàn...</Text>
-                    <Text style={styles.loadingSubText}>Áp dụng logic mới (10 phút + 30 phút)</Text>
+                    <Text style={styles.loadingSubText}>Smart Auto-Check System</Text>
                 </View>
             </ScreenWrapper>
         );
     }
-
-    const upcomingTables = getUpcomingTablesWithCustomTime();
-    const statusCounts = getStatusCounts();
-    const activeTablesInfo = getActiveTablesInfo();
 
     return (
         <ScreenWrapper bg={'#FFBF00'}>
             <View style={styles.container}>
                 {/* Header */}
                 <View style={styles.header}>
-                    <MyBackButton />
                     <View style={styles.titleContainer}>
                         <Text style={styles.title}>Quản lý bàn</Text>
                         <View style={styles.realtimeIndicator}>
-                            <View style={[styles.realtimeDot, { backgroundColor: isLiveMode ? '#2ecc71' : '#f39c12' }]} />
-                            <Text style={[styles.realtimeText, { color: isLiveMode ? '#2ecc71' : '#f39c12' }]}>
-                                {isLiveMode ? 'Smart Auto-Check' : 'Custom Time Mode'}
+                            <View style={[styles.realtimeDot, {
+                                backgroundColor: state.isLiveMode ? '#2ecc71' : '#f39c12'
+                            }]} />
+                            <Text style={[styles.realtimeText, {
+                                color: state.isLiveMode ? '#2ecc71' : '#f39c12'
+                            }]}>
+                                {state.isLiveMode ? 'LIVE AUTO-CHECK' : 'MANUAL MODE'} {formatLastCheck} • {state.autoCheckStatus || 'Hoạt động'}
                             </Text>
-                            {isLiveMode && (
-                                <Text style={styles.autoCheckText}>
-                                    {formatLastCheck()} • {autoCheckStatus || 'Hoạt động'}
-                                </Text>
-                            )}
                         </View>
                     </View>
-                    <View style={styles.headerButtons}>
-                        <Pressable style={styles.autoCheckButton} onPress={manualAutoCheck}>
-                            <MaterialIcons name="assignment-turned-in" size={20} color={theme.colors.text} />
-                        </Pressable>
-                        <Pressable style={styles.refreshButton} onPress={onRefresh}>
-                            <MaterialIcons name="refresh" size={24} color={theme.colors.text} />
-                        </Pressable>
-                    </View>
+                    <Pressable style={styles.actionButton} onPress={handleRefresh}>
+                        <MaterialIcons name="refresh" size={20} color={theme.colors.text} />
+                    </Pressable>
                 </View>
 
                 {/* DateTime Controls */}
-                {renderDateTimeControls()}
+                {DateTimeControls}
 
-                {/* DateTime Pickers */}
-                {showDatePicker && (
-                    <DateTimePicker
-                        value={selectedDateTime}
-                        mode="date"
-                        display="default"
-                        onChange={onDateChange}
-                    />
-                )}
-                {showTimePicker && (
-                    <DateTimePicker
-                        value={selectedDateTime}
-                        mode="time"
-                        display="default"
-                        onChange={onTimeChange}
-                    />
-                )}
-
-                {/* Upcoming Alert (chỉ trong 10 phút) */}
-                {upcomingTables.length > 0 && (
-                    <View style={styles.upcomingAlert}>
-                        <MaterialIcons name="notification-important" size={16} color="#ff6b6b" />
-                        <Text style={styles.upcomingText}>
-                            🔔 {upcomingTables.length} đặt bàn trong 10 phút tới ({formatSelectedDateTime()})
-                        </Text>
-                    </View>
-                )}
-
-                {/* Enhanced Global Stats */}
-                <View style={styles.globalStats}>
-                    <Text style={styles.globalStatsText}>
-                        📊 Tại {formatSelectedDateTime()}: {statusCounts.occupied + statusCounts.reserved + statusCounts.ready} hoạt động / {statusCounts.total} bàn
-                    </Text>
-                    {(statusChanges > 0 || dataFixes > 0 || businessFixes > 0) && isLiveMode && (
-                        <Text style={styles.changesText}>
-                            🔄 Lần check cuối: {statusChanges} thay đổi, {dataFixes + businessFixes} sửa lỗi
-                        </Text>
-                    )}
-                    {!isLiveMode && (
-                        <Text style={styles.customModeText}>
-                            ⏰ Chế độ tùy chỉnh: Hiển thị đặt bàn trong 10 phút tới, occupied ≤ 30 phút
-                        </Text>
-                    )}
-                </View>
+                {/* Stats Bar */}
+                {StatsBar}
 
                 {/* Floor Tabs */}
-                <View style={styles.floorTabsContainer}>
-                    <FlatList
-                        data={floors}
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        renderItem={({ item: floor, index }) => {
-                            const floorTables = getTablesByFloor(floor);
-                            const activeCount = floorTables.filter(t => 
-                                t.status === 'occupied' || t.status === 'reserved' || t.status === 'ready'
-                            ).length;
-                            
-                            return (
-                                <Pressable
-                                    style={[
-                                        styles.floorTab,
-                                        currentFloor === index && styles.activeFloorTab
-                                    ]}
-                                    onPress={() => {
-                                        setCurrentFloor(index);
-                                        pagerRef.current?.setPage(index);
-                                        setSelectedTable(null);
-                                    }}
-                                >
-                                    <Text style={[
-                                        styles.floorTabText,
-                                        currentFloor === index && styles.activeFloorTabText
-                                    ]}>
-                                        Tầng {floor}
-                                    </Text>
-                                    <Text style={[
-                                        styles.floorTabCount,
-                                        currentFloor === index && styles.activeFloorTabCount
-                                    ]}>
-                                        {activeCount}/{floorTables.length} hoạt động
-                                    </Text>
-                                </Pressable>
-                            );
-                        }}
-                        keyExtractor={(item) => item.toString()}
-                        contentContainerStyle={styles.floorTabsList}
-                    />
-                </View>
+                {FloorTabs}
 
                 {/* Tables Container */}
                 <View style={styles.tablesContainer}>
@@ -1195,323 +952,489 @@ const tableManageScr = () => {
                         style={styles.pagerView}
                         initialPage={0}
                         onPageSelected={(e) => {
-                            setCurrentFloor(e.nativeEvent.position);
-                            setSelectedTable(null);
+                            updateState({
+                                currentFloor: e.nativeEvent.position,
+                                selectedTable: null
+                            });
                         }}
                     >
-                        {floors.map(floor => (
+                        {state.floors.map(floor => (
                             <View key={floor} style={styles.pageView}>
-                                {renderFloorPage(floor)}
+                                <FloorPage floor={floor} />
                             </View>
                         ))}
                     </PagerView>
                 </View>
 
-                {/* Enhanced Status Legend */}
-                <View style={styles.legend}>
-                    <View style={styles.legendItem}>
-                        <View style={[styles.legendColor, { backgroundColor: '#ff4757' }]} />
-                        <Text style={styles.legendText}>Có khách (≤30p)</Text>
-                    </View>
-                    <View style={styles.legendItem}>
-                        <View style={[styles.legendColor, { backgroundColor: '#ffa502' }]} />
-                        <Text style={styles.legendText}>Đặt bàn (10p)</Text>
-                    </View>
-                    <View style={styles.legendItem}>
-                        <View style={[styles.legendColor, { backgroundColor: '#ff6b6b' }]} />
-                        <Text style={styles.legendText}>Sẵn sàng</Text>
-                    </View>
-                    <View style={styles.legendItem}>
-                        <View style={[styles.legendColor, { backgroundColor: '#2ed573' }]} />
-                        <Text style={styles.legendText}>Trống</Text>
-                    </View>
-                </View>
+                {/* Status Legend */}
+                {StatusLegend}
+
+                {/* DateTime Pickers */}
+                {state.showDatePicker && (
+                    <DateTimePicker
+                        value={state.selectedDateTime}
+                        mode="date"
+                        display="default"
+                        onChange={(e, date) => handleDateTimeChange('date', date)}
+                    />
+                )}
+                {state.showTimePicker && (
+                    <DateTimePicker
+                        value={state.selectedDateTime}
+                        mode="time"
+                        display="default"
+                        onChange={(e, time) => handleDateTimeChange('time', time)}
+                    />
+                )}
+
+                {/* Table Action Modal */}
+                {TableActionModal}
             </View>
         </ScreenWrapper>
     );
 };
 
-export default tableManageScr;
+export default manageTableScr;
 
 // ===================
-// ENHANCED STYLES
+// STYLES
 // ===================
-
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        paddingHorizontal: wp(4),
+        paddingHorizontal: wp(3),
+        backgroundColor: '#FFBF00'
     },
+    centerContent: {
+        justifyContent: 'center',
+        alignItems: 'center'
+    },
+
+    // Header
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 15,
+        height: hp(8),
+        paddingVertical: 5
     },
     titleContainer: {
         alignItems: 'center',
+        flex: 1,
+        paddingHorizontal: 10
     },
     title: {
-        fontSize: hp(2.5),
+        fontSize: hp(2.2),
         fontWeight: 'bold',
-        color: theme.colors.text,
+        color: theme.colors.text
     },
     realtimeIndicator: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 4,
+        marginTop: 2
     },
     realtimeDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        marginRight: 4,
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        marginRight: 4
     },
     realtimeText: {
-        fontSize: 10,
-        fontWeight: '600',
-    },
-    autoCheckText: {
         fontSize: 9,
-        color: '#666',
-        marginLeft: 4,
+        fontWeight: '500'
     },
-    headerButtons: {
-        flexDirection: 'row',
-        gap: 8,
-    },
-    autoCheckButton: {
+    actionButton: {
         padding: 8,
-        borderRadius: 20,
-        backgroundColor: 'rgba(255,255,255,0.3)',
+        borderRadius: 15,
+        backgroundColor: 'rgba(255,255,255,0.3)'
     },
-    refreshButton: {
-        padding: 8,
-        borderRadius: 20,
-        backgroundColor: 'rgba(255,255,255,0.3)',
-    },
-    
+
     // DateTime Controls
     dateTimeControls: {
-        backgroundColor: 'rgba(255,255,255,0.9)',
-        paddingVertical: 10,
-        paddingHorizontal: 15,
-        borderRadius: 10,
-        marginBottom: 15,
+        backgroundColor: 'rgba(255,255,255,0.95)',
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        marginBottom: 8,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        height: hp(6)
     },
     modeToggle: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 20,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 15,
         backgroundColor: '#f0f0f0',
-        gap: 6,
+        gap: 4
     },
     modeToggleActive: {
-        backgroundColor: theme.colors.primary,
+        backgroundColor: theme.colors.primary
     },
     modeToggleText: {
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: '600',
-        color: theme.colors.text,
+        color: theme.colors.text
     },
     modeToggleTextActive: {
-        color: 'white',
+        color: 'white'
     },
     customTimeControls: {
         flexDirection: 'row',
-        gap: 10,
+        gap: 8,
+        alignItems: 'center'
     },
     dateTimeButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 16,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
         backgroundColor: '#f8f9fa',
         borderWidth: 1,
         borderColor: '#e0e0e0',
-        gap: 6,
+        gap: 4
     },
     dateTimeButtonText: {
-        fontSize: 12,
+        fontSize: 10,
         color: theme.colors.text,
-        fontWeight: '500',
+        fontWeight: '500'
     },
-    
-    upcomingAlert: {
+    liveTimeDisplay: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#2ecc71',
+        backgroundColor: 'rgba(46, 204, 113, 0.1)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+        fontFamily: 'monospace'
+    },
+
+    // Stats Bar
+    statsBar: {
+        backgroundColor: 'rgba(255,255,255,0.95)',
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        marginBottom: 8,
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(255, 107, 107, 0.1)',
-        padding: 12,
-        borderRadius: 8,
-        marginBottom: 10,
-        borderLeftWidth: 4,
-        borderLeftColor: '#ff6b6b',
+        gap: 8,
+        height: hp(5)
     },
-    upcomingText: {
-        fontSize: 12,
-        color: '#ff6b6b',
-        fontWeight: '600',
-        marginLeft: 8,
-    },
-    globalStats: {
-        backgroundColor: 'rgba(255,255,255,0.9)',
-        paddingVertical: 10,
-        paddingHorizontal: 15,
-        borderRadius: 10,
-        marginBottom: 15,
-        alignItems: 'center',
-    },
-    globalStatsText: {
-        fontSize: 12,
+    statsText: {
+        fontSize: 11,
         color: theme.colors.text,
-        fontWeight: '600',
-    },
-    changesText: {
-        fontSize: 10,
-        color: '#ff6b6b',
         fontWeight: '500',
-        marginTop: 2,
+        flex: 1
     },
-    customModeText: {
-        fontSize: 10,
-        color: '#f39c12',
-        fontWeight: '500',
-        marginTop: 2,
-        textAlign: 'center',
-    },
+
+    // Floor Navigation
     floorTabsContainer: {
-        marginBottom: 15,
+        marginBottom: 8,
+        height: hp(7)
     },
     floorTabsList: {
-        paddingHorizontal: 5,
+        paddingHorizontal: 5
     },
     floorTab: {
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        marginHorizontal: 5,
-        borderRadius: 16,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        marginHorizontal: 4,
+        borderRadius: 12,
         backgroundColor: 'white',
         borderWidth: 1,
         borderColor: '#e0e0e0',
         alignItems: 'center',
-        minWidth: 120,
+        minWidth: 80,
+        justifyContent: 'center'
     },
     activeFloorTab: {
         backgroundColor: theme.colors.primary,
-        borderColor: theme.colors.primary,
+        borderColor: theme.colors.primary
     },
     floorTabText: {
-        fontSize: 14,
+        fontSize: 12,
         fontWeight: '600',
-        color: theme.colors.text,
+        color: theme.colors.text
     },
     activeFloorTabText: {
-        color: 'white',
+        color: 'white'
     },
     floorTabCount: {
-        fontSize: 9,
+        fontSize: 8,
         color: theme.colors.textLight,
-        marginTop: 2,
-        textAlign: 'center',
+        marginTop: 1
     },
     activeFloorTabCount: {
-        color: 'rgba(255,255,255,0.9)',
+        color: 'rgba(255,255,255,0.9)'
     },
+
+    // Tables Container
     tablesContainer: {
         flex: 1,
         backgroundColor: 'white',
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
+        borderTopLeftRadius: 15,
+        borderTopRightRadius: 15,
         overflow: 'hidden',
+        marginBottom: 8
     },
     pagerView: {
-        flex: 1,
+        flex: 1
     },
     pageView: {
-        flex: 1,
+        flex: 1
     },
     floorContainer: {
         flex: 1,
-        paddingTop: 10,
+        paddingTop: 8
     },
     floorStats: {
         flexDirection: 'row',
         justifyContent: 'space-around',
-        paddingVertical: 15,
-        paddingHorizontal: 15,
+        paddingVertical: 12,
+        paddingHorizontal: 12,
         backgroundColor: '#f8f9fa',
-        marginBottom: 10,
-        marginHorizontal: 15,
-        borderRadius: 12,
+        marginBottom: 8,
+        marginHorizontal: 12,
+        borderRadius: 10
     },
     statItem: {
-        alignItems: 'center',
+        alignItems: 'center'
     },
     statNumber: {
-        fontSize: 18,
-        fontWeight: 'bold',
+        fontSize: 16,
+        fontWeight: 'bold'
     },
     statLabel: {
-        fontSize: 11,
+        fontSize: 10,
         color: theme.colors.textLight,
         marginTop: 2,
-        textAlign: 'center',
+        textAlign: 'center'
     },
     tablesList: {
-        paddingHorizontal: 10,
-        paddingBottom: 20,
+        paddingHorizontal: 8,
+        paddingBottom: 15
     },
     emptyFloor: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        paddingTop: 100,
+        paddingTop: 80
     },
     emptyFloorText: {
-        fontSize: 16,
+        fontSize: 14,
         color: theme.colors.textLight,
-        marginTop: 15,
-        textAlign: 'center',
+        marginTop: 12,
+        textAlign: 'center'
     },
+
+    // Legend
     legend: {
+        backgroundColor: 'rgba(0,0,0,0.8)',
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        height: hp(8),
+        justifyContent: 'center'
+    },
+    legendTitle: {
+        fontSize: 9,
+        color: 'white',
+        textAlign: 'center',
+        marginBottom: 4
+    },
+    legendItems: {
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
-        paddingVertical: 15,
-        gap: 15,
+        gap: 12
     },
     legendItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        gap: 4
     },
     legendColor: {
-        width: 14,
-        height: 14,
-        borderRadius: 7,
+        width: 10,
+        height: 10,
+        borderRadius: 5
     },
     legendText: {
-        fontSize: 11,
+        fontSize: 9,
+        color: 'white',
+        fontWeight: '500'
+    },
+
+    // Modal Styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        justifyContent: 'flex-end'
+    },
+    modalContent: {
+        backgroundColor: 'white',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        maxHeight: screenHeight * 0.8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -5 },
+        shadowOpacity: 0.25,
+        shadowRadius: 15,
+        elevation: 25
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 15,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f0f0f0'
+    },
+    modalHeaderLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1
+    },
+    modalTitleContainer: {
+        marginLeft: 12,
+        flex: 1
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: 'bold'
+    },
+    modalSubtitle: {
+        fontSize: 12,
+        color: theme.colors.textLight,
+        marginTop: 2
+    },
+    closeButton: {
+        padding: 8,
+        borderRadius: 15,
+        backgroundColor: 'rgba(0,0,0,0.05)'
+    },
+    modalBody: {
+        maxHeight: screenHeight * 0.4
+    },
+    customerInfo: {
+        paddingHorizontal: 20,
+        paddingVertical: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f0f0f0'
+    },
+    customerName: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: theme.colors.text,
+        marginBottom: 4
+    },
+    customerDetails: {
+        fontSize: 13,
+        color: theme.colors.textLight,
+        marginBottom: 2
+    },
+    statusInfo: {
+        paddingHorizontal: 20,
+        paddingVertical: 15
+    },
+    statusLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: theme.colors.text,
+        marginBottom: 8
+    },
+    statusRow: {
+        marginBottom: 8
+    },
+    statusDetail: {
+        fontSize: 12,
+        color: theme.colors.textLight,
+        marginBottom: 2
+    },
+    timeInfo: {
+        fontSize: 13,
         color: theme.colors.text,
         fontWeight: '500',
+        marginBottom: 4
     },
+    emptyTableInfo: {
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 30
+    },
+    emptyTableText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: theme.colors.text,
+        textAlign: 'center',
+        marginTop: 10,
+        marginBottom: 5
+    },
+    emptyTableSubText: {
+        fontSize: 13,
+        color: theme.colors.textLight,
+        textAlign: 'center'
+    },
+    modalActions: {
+        flexDirection: 'row',
+        paddingHorizontal: 20,
+        paddingVertical: 20,
+        gap: 10,
+        borderTopWidth: 1,
+        borderTopColor: '#f0f0f0'
+    },
+    actionButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderRadius: 12,
+        gap: 6
+    },
+    actionButtonText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: 'white'
+    },
+    checkoutButton: {
+        backgroundColor: '#2ed573'
+    },
+    checkinButton: {
+        backgroundColor: '#ff6b6b'
+    },
+    cancelButton: {
+        backgroundColor: '#e74c3c'
+    },
+    createButton: {
+        backgroundColor: theme.colors.primary
+    },
+    detailButton: {
+        backgroundColor: 'white',
+        borderWidth: 1,
+        borderColor: theme.colors.primary
+    },
+
+    // Loading
     loadingText: {
-        fontSize: 18,
+        fontSize: 16,
         color: theme.colors.text,
         fontWeight: '600',
-        marginTop: 15,
-        textAlign: 'center',
+        marginTop: 12,
+        textAlign: 'center'
     },
     loadingSubText: {
-        fontSize: 14,
+        fontSize: 12,
         color: theme.colors.textLight,
-        marginTop: 5,
-        textAlign: 'center',
-    },
+        marginTop: 4,
+        textAlign: 'center'
+    }
 });

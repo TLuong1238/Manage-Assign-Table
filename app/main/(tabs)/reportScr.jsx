@@ -460,7 +460,7 @@ const reportScr = () => {
   };
 
   // ===================
-  // BIỂU ĐỒ CHART KIT - ỔN ĐỊNH NHẤT
+  // BIỂU ĐỒ CHART KIT
   // ===================
   const renderRevenueChart = () => {
     if (!chartData || chartData.fullData.length === 0) {
