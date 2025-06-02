@@ -380,7 +380,6 @@ export const fetchBill = async () => {
             .select('*')
             .order('created_at', { ascending: false });
 
-        console.log('fetchBill data: ', data);
         if (error) {
             console.log('fetchBill error: ', error);
             return { success: false, msg: 'Không thể lấy dữ liệu đặt bàn' };
