@@ -2,9 +2,9 @@ import { useState, useCallback, useMemo, useRef } from 'react';
 import { Alert } from 'react-native';
 import { fetchTable } from '../services/tableService';
 import { fetchProduct } from '../services/productService';
-import { fetchCate } from '../services/cateServiec';
 import { createBill, createDetail, fetchBillByTimeRange, fetchDetailByBillIds } from '../services/billService';
 import { createCartDetail } from '../services/cartDetailService';
+import { fetchCate } from '../services/cateService';
 
 const SEARCH_DEBOUNCE_DELAY = 300;
 const MAX_QUANTITY_PER_ITEM = 20;
@@ -522,6 +522,7 @@ export const useAssignTable = (user) => {
     setProductState,
     setModalState,
     setLoading,
+    setCart,
     
     // Functions
     fetchProductsData,

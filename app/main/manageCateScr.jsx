@@ -7,7 +7,7 @@ import MyBackButton from '../../components/MyBackButton'
 import * as Icon from 'react-native-feather'
 import MaterialIcons from '@expo/vector-icons/MaterialIcons'
 import { useRouter } from 'expo-router'
-import { fetchCate, searchCategories, deleteCate } from '../../services/cateServiec'
+import { fetchCate, searchCategories, deleteCate } from '../../services/cateService'
 
 import { useDebounce } from '../../hook/useDebounce'
 const manageCateScr = () => {

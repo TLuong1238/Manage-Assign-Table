@@ -8,7 +8,7 @@ import * as Icon from 'react-native-feather'
 import MaterialIcons from '@expo/vector-icons/MaterialIcons'
 import { useRouter } from 'expo-router'
 import { fetchProduct, searchProducts, deleteProduct } from '../../services/productService'
-import { fetchCate } from '../../services/cateServiec'
+import { fetchCate } from '../../services/cateService'
 import { useDebounce } from '../../hook/useDebounce'
 
 const manageProductScr = () => {

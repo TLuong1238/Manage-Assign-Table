@@ -10,7 +10,7 @@ import * as Icon from 'react-native-feather'
 import MaterialIcons from '@expo/vector-icons/MaterialIcons'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { getProductById, updateProduct, createProduct, deleteProduct } from '../../services/productService'
-import { fetchCate } from '../../services/cateServiec'
+import { fetchCate } from '../../services/cateService'
 import * as ImagePicker from 'expo-image-picker'
 
 const detailsProductScr = () => {

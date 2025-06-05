@@ -93,26 +93,32 @@ const getTableStatusFromBill = (bill, referenceTime) => {
     const billTime = new Date(bill.time);
     const minutesDiff = Math.floor((referenceTime.getTime() - billTime.getTime()) / 60000);
 
+    console.log(`🔍 Table ${bill.tableid || 'unknown'}: Bill time=${billTime.toLocaleString('vi-VN')}, Reference time=${referenceTime.toLocaleString('vi-VN')}, minutesDiff=${minutesDiff}`);
+
     // Logic mapping theo yêu cầu
     if (bill.state === BILL_STATE.IN_ORDER) {
         if (bill.visit === VISIT_STATUS.ON_PROCESS) {
             // in_order + on_process = RESERVED (đặt bàn)
+            // ✅ SỬA: Kiểm tra khoảng thời gian hợp lý
+            // Hiển thị đặt bàn từ 10p trước đến 40p sau thời gian đặt
             if (minutesDiff >= -BUSINESS_RULES.reservationShowMinutes &&
                 minutesDiff <= BUSINESS_RULES.autoCheckoutAfterMinutes) {
+                console.log(`✅ RESERVED: minutesDiff=${minutesDiff} trong khoảng [-${BUSINESS_RULES.reservationShowMinutes}, ${BUSINESS_RULES.autoCheckoutAfterMinutes}]`);
                 return TABLE_STATUS.RESERVED;
+            } else {
+                console.log(`❌ EMPTY: minutesDiff=${minutesDiff} ngoài khoảng cho phép`);
+                return TABLE_STATUS.EMPTY;
             }
         }
         else if (bill.visit === VISIT_STATUS.VISITED) {
             // in_order + visited = OCCUPIED (có khách)
-            if (bill.visit === VISIT_STATUS.VISITED) {
-                return TABLE_STATUS.OCCUPIED;
-            }
+            console.log(`✅ OCCUPIED: in_order + visited`);
+            return TABLE_STATUS.OCCUPIED;
         }
     }
 
-    // completed + visited = empty
-    // cancelled + un_visited = empty (khách không đến)  
-    // cancelled + on_process = empty (khách hủy)
+    // completed/cancelled = empty
+    console.log(`✅ EMPTY: state=${bill.state}, visit=${bill.visit}`);
     return TABLE_STATUS.EMPTY;
 };
 

@@ -8,7 +8,7 @@ import MyButton from '../../components/MyButton'
 import MyInput from '../../components/MyInput'
 import * as Icon from 'react-native-feather'
 import { useRouter, useLocalSearchParams } from 'expo-router'
-import { getCategoryById, updateCategory, createCategory } from '../../services/cateServiec'
+import { getCategoryById, updateCategory, createCategory } from '../../services/cateService'
 
 const detailsCateScr = () => {
   const router = useRouter();
@@ -91,7 +91,7 @@ const detailsCateScr = () => {
           style: 'destructive',
           onPress: async () => {
             setLoading(true);
-            const { deleteCategory } = require('../../services/cateServiec');
+            const { deleteCategory } = require('../../services/cateService');
             const result = await deleteCategory(categoryId);
             if (result.success) {
               Alert.alert(
