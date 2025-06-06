@@ -8,7 +8,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons'
 import DateTimePicker from '@react-native-community/datetimepicker'
 
 // CHART KIT - TỐI ƯU NHẤT CHO EXPO
-import { BarChart, LineChart } from 'react-native-chart-kit'
+import { LineChart } from 'react-native-chart-kit'
 
 // Services
 import {
@@ -32,7 +32,6 @@ const reportScr = () => {
   const [reportType, setReportType] = useState('daily');
   const [stats, setStats] = useState({});
   const [chartData, setChartData] = useState(null);
-  const [chartType, setChartType] = useState('bar'); // 'bar' hoặc 'line'
 
   // ===================
   // EFFECTS
@@ -52,7 +51,7 @@ const reportScr = () => {
   useEffect(() => {
     const newChartData = generateChartData();
     setChartData(newChartData);
-  }, [bills, reportType]);
+  }, [bills, reportType, selectedDate]);
 
   // ===================
   // DATA LOADING
@@ -148,6 +147,8 @@ const reportScr = () => {
     }
 
     switch (reportType) {
+      case 'yearly':
+        return generateYearlyChartData();
       case 'monthly':
         return generateMonthlyChartData();
       case 'weekly':
@@ -159,113 +160,61 @@ const reportScr = () => {
     }
   };
 
-  const generateMonthlyChartData = () => {
-    const monthsData = [];
-    const currentDate = new Date();
-
-    for (let i = 5; i >= 0; i--) {
-      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
-
-      const monthRevenue = bills
-        .filter(bill => {
-          if (!bill.created_at || bill.state !== 'completed') return false;
-          const billDate = new Date(bill.created_at);
-          return billDate.getFullYear() === date.getFullYear() &&
-            billDate.getMonth() === date.getMonth();
-        })
-        .reduce((sum, bill) => sum + safeToNumber(bill.price, 0), 0);
-
-      const monthCount = bills
-        .filter(bill => {
-          if (!bill.created_at) return false;
-          const billDate = new Date(bill.created_at);
-          return billDate.getFullYear() === date.getFullYear() &&
-            billDate.getMonth() === date.getMonth();
-        }).length;
-
-      monthsData.push({
-        month: date.getMonth() + 1,
-        year: date.getFullYear(),
-        label: `T${date.getMonth() + 1}`,
-        fullLabel: `Tháng ${date.getMonth() + 1}/${date.getFullYear()}`,
-        revenue: monthRevenue / 1000000, // Triệu VNĐ
-        fullRevenue: monthRevenue,
-        billCount: monthCount
-      });
-    }
-
-    return {
-      labels: monthsData.map(item => item.label),
-      datasets: [{
-        data: monthsData.map(item => Math.max(0.1, item.revenue)) // Tránh giá trị 0
-      }],
-      fullData: monthsData,
-      maxRevenue: Math.max(...monthsData.map(item => item.revenue)),
-      totalRevenue: monthsData.reduce((sum, item) => sum + item.fullRevenue, 0),
-      unit: 'triệu VNĐ',
-      unitShort: 'M',
-      period: '6 tháng'
-    };
-  };
-
-  const generateWeeklyChartData = () => {
-    const weeksData = [];
-    const currentDate = new Date();
-
-    for (let i = 3; i >= 0; i--) {
-      const weekStart = new Date(currentDate);
-      weekStart.setDate(currentDate.getDate() - (i * 7) - currentDate.getDay());
-
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
-
-      const weekRevenue = bills
-        .filter(bill => {
-          if (!bill.created_at || bill.state !== 'completed') return false;
-          const billDate = new Date(bill.created_at);
-          return billDate >= weekStart && billDate <= weekEnd;
-        })
-        .reduce((sum, bill) => sum + safeToNumber(bill.price, 0), 0);
-
-      const weekCount = bills
-        .filter(bill => {
-          if (!bill.created_at) return false;
-          const billDate = new Date(bill.created_at);
-          return billDate >= weekStart && billDate <= weekEnd;
-        }).length;
-
-      weeksData.push({
-        weekStart,
-        weekEnd,
-        label: `${weekStart.getDate()}/${weekStart.getMonth() + 1}`,
-        fullLabel: `Tuần ${weekStart.getDate()}/${weekStart.getMonth() + 1} - ${weekEnd.getDate()}/${weekEnd.getMonth() + 1}`,
-        revenue: weekRevenue / 1000000, // Triệu VNĐ
-        fullRevenue: weekRevenue,
-        billCount: weekCount
-      });
-    }
-
-    return {
-      labels: weeksData.map(item => item.label),
-      datasets: [{
-        data: weeksData.map(item => Math.max(0.1, item.revenue)) // Tránh giá trị 0
-      }],
-      fullData: weeksData,
-      maxRevenue: Math.max(...weeksData.map(item => item.revenue)),
-      totalRevenue: weeksData.reduce((sum, item) => sum + item.fullRevenue, 0),
-      unit: 'triệu VNĐ',
-      unitShort: 'M',
-      period: '4 tuần gần nhất'
-    };
-  };
-
+  // NGÀY: Hiển thị các khung giờ trong ngày (6h-22h)
   const generateDailyChartData = () => {
-    const daysData = [];
-    const currentDate = new Date();
+    const hours = Array.from({ length: 17 }, (_, i) => i + 6); // 6h-22h
+    const hourLabels = hours.map(h => `${h}h`);
+    const hourData = hours.map(hour => {
+      const revenue = bills
+        .filter(bill => {
+          if (!bill.created_at || bill.state !== 'completed') return false;
+          const billDate = new Date(bill.created_at);
+          return (
+            billDate.getHours() === hour &&
+            billDate.toDateString() === selectedDate.toDateString()
+          );
+        })
+        .reduce((sum, bill) => sum + safeToNumber(bill.price, 0), 0);
+      return revenue / 1000; // Nghìn VNĐ
+    });
 
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date(currentDate);
-      date.setDate(currentDate.getDate() - i);
+    return {
+      labels: hourLabels,
+      datasets: [{ data: hourData.map(v => Math.max(1, v)) }],
+      fullData: hourData.map((revenue, index) => ({
+        hour: hours[index],
+        label: hourLabels[index],
+        fullLabel: `${hours[index]}:00 - ${hours[index] + 1}:00`,
+        revenue,
+        fullRevenue: revenue * 1000,
+        billCount: bills.filter(bill => {
+          if (!bill.created_at) return false;
+          const billDate = new Date(bill.created_at);
+          return (
+            billDate.getHours() === hours[index] &&
+            billDate.toDateString() === selectedDate.toDateString()
+          );
+        }).length
+      })),
+      maxRevenue: Math.max(...hourData),
+      totalRevenue: hourData.reduce((sum, v) => sum + v, 0) * 1000,
+      unit: 'nghìn VNĐ',
+      unitShort: 'K',
+      period: 'theo giờ',
+    };
+  };
+
+  // TUẦN: Hiển thị 7 ngày trong tuần
+  const generateWeeklyChartData = () => {
+    const weekStart = new Date(selectedDate);
+    weekStart.setDate(selectedDate.getDate() - selectedDate.getDay()); // Chủ nhật đầu tuần
+
+    const daysData = [];
+    const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(weekStart);
+      date.setDate(weekStart.getDate() + i);
 
       const dayRevenue = bills
         .filter(bill => {
@@ -284,8 +233,8 @@ const reportScr = () => {
 
       daysData.push({
         date: new Date(date),
-        label: `${date.getDate()}/${date.getMonth() + 1}`,
-        fullLabel: `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`,
+        label: dayNames[i],
+        fullLabel: `${dayNames[i]} (${date.getDate()}/${date.getMonth() + 1})`,
         revenue: dayRevenue / 1000, // Nghìn VNĐ
         fullRevenue: dayRevenue,
         billCount: dayCount
@@ -294,15 +243,118 @@ const reportScr = () => {
 
     return {
       labels: daysData.map(item => item.label),
-      datasets: [{
-        data: daysData.map(item => Math.max(1, item.revenue)) // Tránh giá trị 0
-      }],
+      datasets: [{ data: daysData.map(item => Math.max(1, item.revenue)) }],
       fullData: daysData,
       maxRevenue: Math.max(...daysData.map(item => item.revenue)),
       totalRevenue: daysData.reduce((sum, item) => sum + item.fullRevenue, 0),
       unit: 'nghìn VNĐ',
       unitShort: 'K',
-      period: '7 ngày gần nhất'
+      period: 'tuần này'
+    };
+  };
+
+  // THÁNG: Hiển thị các ngày trong tháng (1-31)
+  const generateMonthlyChartData = () => {
+    const year = selectedDate.getFullYear();
+    const month = selectedDate.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    const dayLabels = Array.from({ length: daysInMonth }, (_, i) => `${i + 1}`);
+    const dayData = Array.from({ length: daysInMonth }, (_, i) => {
+      const day = i + 1;
+      const revenue = bills
+        .filter(bill => {
+          if (!bill.created_at || bill.state !== 'completed') return false;
+          const billDate = new Date(bill.created_at);
+          return (
+            billDate.getFullYear() === year &&
+            billDate.getMonth() === month &&
+            billDate.getDate() === day
+          );
+        })
+        .reduce((sum, bill) => sum + safeToNumber(bill.price, 0), 0);
+
+      const billCount = bills
+        .filter(bill => {
+          if (!bill.created_at) return false;
+          const billDate = new Date(bill.created_at);
+          return (
+            billDate.getFullYear() === year &&
+            billDate.getMonth() === month &&
+            billDate.getDate() === day
+          );
+        }).length;
+
+      return {
+        day,
+        label: `${day}`,
+        fullLabel: `${day}/${month + 1}/${year}`,
+        revenue: revenue / 1000, // Nghìn VNĐ
+        fullRevenue: revenue,
+        billCount
+      };
+    });
+
+    return {
+      labels: dayLabels,
+      datasets: [{ data: dayData.map(item => Math.max(1, item.revenue)) }],
+      fullData: dayData,
+      maxRevenue: Math.max(...dayData.map(item => item.revenue)),
+      totalRevenue: dayData.reduce((sum, item) => sum + item.fullRevenue, 0),
+      unit: 'nghìn VNĐ',
+      unitShort: 'K',
+      period: `tháng ${month + 1}/${year}`
+    };
+  };
+
+  // NĂM: Hiển thị 12 tháng trong năm
+  const generateYearlyChartData = () => {
+    const year = selectedDate.getFullYear();
+    const monthNames = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12'];
+
+    const monthsData = [];
+
+    for (let month = 0; month < 12; month++) {
+      const monthRevenue = bills
+        .filter(bill => {
+          if (!bill.created_at || bill.state !== 'completed') return false;
+          const billDate = new Date(bill.created_at);
+          return (
+            billDate.getFullYear() === year &&
+            billDate.getMonth() === month
+          );
+        })
+        .reduce((sum, bill) => sum + safeToNumber(bill.price, 0), 0);
+
+      const monthCount = bills
+        .filter(bill => {
+          if (!bill.created_at) return false;
+          const billDate = new Date(bill.created_at);
+          return (
+            billDate.getFullYear() === year &&
+            billDate.getMonth() === month
+          );
+        }).length;
+
+      monthsData.push({
+        month: month + 1,
+        label: monthNames[month],
+        fullLabel: `Tháng ${month + 1}/${year}`,
+        revenue: monthRevenue / 1000, // Nghìn VNĐ (không phải triệu)
+        fullRevenue: monthRevenue,
+        billCount: monthCount
+      });
+    }
+
+    return {
+      labels: monthsData.map(item => item.label),
+      datasets: [{ data: monthsData.map(item => Math.max(1, item.revenue)) }],
+      fullData: monthsData,
+      maxRevenue: Math.max(...monthsData.map(item => item.revenue)),
+      totalRevenue: monthsData.reduce((sum, item) => sum + item.fullRevenue, 0),
+      unit: 'nghìn VNĐ', // Thay đổi từ triệu về nghìn
+      unitShort: 'K', // Thay đổi từ M về K
+      period: `năm ${year}`
     };
   };
 
@@ -314,7 +366,8 @@ const reportScr = () => {
       {[
         { key: 'daily', label: 'Ngày', icon: 'today' },
         { key: 'weekly', label: 'Tuần', icon: 'date-range' },
-        { key: 'monthly', label: 'Tháng', icon: 'calendar-month' }
+        { key: 'monthly', label: 'Tháng', icon: 'calendar-month' },
+        { key: 'yearly', label: 'Năm', icon: 'calendar-view-month' }
       ].map(typeOption => (
         <Pressable
           key={typeOption.key}
@@ -468,7 +521,7 @@ const reportScr = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>📊 Biểu đồ doanh thu</Text>
           <View style={styles.emptyChartState}>
-            <MaterialIcons name="bar-chart" size={60} color={theme.colors.textLight} />
+            <MaterialIcons name="show-chart" size={60} color={theme.colors.textLight} />
             <Text style={styles.emptyStateText}>Không có dữ liệu doanh thu</Text>
             <Text style={styles.emptyStateSubtext}>để hiển thị biểu đồ</Text>
           </View>
@@ -482,7 +535,7 @@ const reportScr = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>📊 Biểu đồ doanh thu</Text>
           <View style={styles.emptyChartState}>
-            <MaterialIcons name="bar-chart" size={60} color={theme.colors.textLight} />
+            <MaterialIcons name="show-chart" size={60} color={theme.colors.textLight} />
             <Text style={styles.emptyStateText}>Chưa có doanh thu</Text>
             <Text style={styles.emptyStateSubtext}>trong khoảng thời gian này</Text>
           </View>
@@ -527,74 +580,29 @@ const reportScr = () => {
           <Text style={styles.sectionTitle}>
             📊 Doanh thu {chartData.period} ({chartData.unit})
           </Text>
-          <View style={styles.chartTypeSelector}>
-            <Pressable
-              style={[
-                styles.chartTypeButton,
-                chartType === 'bar' && styles.chartTypeButtonActive
-              ]}
-              onPress={() => setChartType('bar')}
-            >
-              <MaterialIcons
-                name="bar-chart"
-                size={16}
-                color={chartType === 'bar' ? 'white' : theme.colors.text}
-              />
-            </Pressable>
-            <Pressable
-              style={[
-                styles.chartTypeButton,
-                chartType === 'line' && styles.chartTypeButtonActive
-              ]}
-              onPress={() => setChartType('line')}
-            >
-              <MaterialIcons
-                name="show-chart"
-                size={16}
-                color={chartType === 'line' ? 'white' : theme.colors.text}
-              />
-            </Pressable>
-          </View>
         </View>
 
         <View style={styles.chartContainer}>
-          {/* Chart Kit Charts */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {chartType === 'bar' ? (
-              <BarChart
-                data={chartData}
-                width={Math.max(screenWidth - wp(8), chartData.labels.length * 80)}
-                height={220}
-                yAxisSuffix={chartData.unitShort}
-                yAxisInterval={1}
-                chartConfig={chartConfig}
-                verticalLabelRotation={chartData.labels.length > 4 ? 30 : 0}
-                style={styles.chart}
-                showBarTops={false}
-                fromZero={true}
-                segments={4}
-              />
-            ) : (
-              <LineChart
-                data={chartData}
-                width={Math.max(screenWidth - wp(8), chartData.labels.length * 80)}
-                height={220}
-                yAxisSuffix={chartData.unitShort}
-                yAxisInterval={1}
-                chartConfig={chartConfig}
-                bezier
-                style={styles.chart}
-                segments={4}
-                withDots={true}
-                withShadow={true}
-                withVerticalLabels={true}
-                withHorizontalLabels={true}
-                withInnerLines={true}
-                withOuterLines={true}
-                withVerticalLines={false}
-                withHorizontalLines={true}
-              />
-            )}
+            <LineChart
+              data={chartData}
+              width={Math.max(screenWidth - wp(8), chartData.labels.length * 60)}
+              height={220}
+              yAxisSuffix={chartData.unitShort}
+              yAxisInterval={1}
+              chartConfig={chartConfig}
+              bezier
+              style={styles.chart}
+              segments={4}
+              withDots={true}
+              withShadow={true}
+              withVerticalLabels={true}
+              withHorizontalLabels={true}
+              withInnerLines={true}
+              withOuterLines={true}
+              withVerticalLines={false}
+              withHorizontalLines={true}
+            />
           </ScrollView>
 
           {/* Chart Details */}
@@ -609,7 +617,7 @@ const reportScr = () => {
               </View>
               <View style={styles.chartSummaryItem}>
                 <MaterialIcons name="assessment" size={16} color="#3498db" />
-                <Text style={styles.chartSummaryLabel}>Trung bình/{reportType === 'daily' ? 'ngày' : reportType === 'weekly' ? 'tuần' : 'tháng'}</Text>
+                <Text style={styles.chartSummaryLabel}>Trung bình/{reportType === 'daily' ? 'giờ' : reportType === 'weekly' ? 'ngày' : reportType === 'monthly' ? 'ngày' : 'tháng'}</Text>
                 <Text style={styles.chartSummaryValue}>
                   {avgRevenue.toLocaleString('vi-VN')} đ
                 </Text>
@@ -1196,20 +1204,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 15,
-  },
-  chartTypeSelector: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.8)',
-    borderRadius: 8,
-    padding: 2,
-  },
-  chartTypeButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  chartTypeButtonActive: {
-    backgroundColor: theme.colors.primary,
   },
   chartContainer: {
     backgroundColor: 'white',

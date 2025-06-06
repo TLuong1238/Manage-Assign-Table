@@ -11,7 +11,7 @@ import { theme } from '../../../constants/theme'
 import { fetchPosts } from '../../../services/postServices'
 import MyLoading from '../../../components/MyLoading'
 import MyPostCard from '../../../components/MyPostCard'
-import usePostRt from '../../../hook/usePostRt'
+import { usePostRt } from '../../../hook/usePostRt'
 import MyHeader from '../../../components/MyHeader'
 
 const ProfileScr = () => {

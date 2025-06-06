@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "bunChaObama",
-    "slug": "bunChaObama",
+    "name": "bunChaAd",
+    "slug": "bunChaAd",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -15,7 +15,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.tluong1238.bunChaAdmin"
     },
     "web": {
       "bundler": "metro",
@@ -36,6 +37,15 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "59479dc7-e107-47df-bcbb-a8a1b8ccac8d"
+      }
+    },
+    "owner": "tluong83"
   }
 }

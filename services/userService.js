@@ -159,3 +159,21 @@ export const checkEmailExists = async (email, excludeUserId = null) => {
         return {success: false, msg: error.message};
     }
 }
+// 
+export const checkAdminRole = async (userId) => {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', userId)
+      .single();
+
+    if (error || !data) {
+      return { success: false, isAdmin: false };
+    }
+
+    return { success: true, isAdmin: data.role === 'admin' };
+  } catch (e) {
+    return { success: false, isAdmin: false };
+  }
+};

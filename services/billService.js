@@ -86,8 +86,20 @@ export const getBillsByMonth = async (date) => {
 };
 
 /**
- * Lấy bills theo loại báo cáo
- * @param {string} reportType - 'daily', 'weekly', 'monthly'
+ * Lấy bills theo năm - THÊM MỚI
+ * @param {Date} date - Ngày trong năm cần lấy
+ * @returns {Promise<{success: boolean, data?: Array, msg?: string}>}
+ */
+export const getBillsByYear = async (date) => {
+    const startDate = new Date(date.getFullYear(), 0, 1, 0, 0, 0); // 1/1/year
+    const endDate = new Date(date.getFullYear(), 11, 31, 23, 59, 59); // 31/12/year
+
+    return await getBillsInDateRange(startDate.toISOString(), endDate.toISOString());
+};
+
+/**
+ * Lấy bills theo loại báo cáo - SỬA LẠI
+ * @param {string} reportType - 'daily', 'weekly', 'monthly', 'yearly'
  * @param {Date} selectedDate - Ngày được chọn
  * @returns {Promise<{success: boolean, data?: Array, msg?: string}>}
  */
@@ -101,6 +113,8 @@ export const getBillsByReportType = async (reportType, selectedDate) => {
             return await getBillsByWeek(selectedDate);
         case 'monthly':
             return await getBillsByMonth(selectedDate);
+        case 'yearly':
+            return await getBillsByYear(selectedDate);
         default:
             return await getBillsByDate(selectedDate);
     }
@@ -284,7 +298,7 @@ export const calculateAllStats = (bills) => {
 // ===================
 
 /**
- * Format date range cho display
+ * Format date range cho display - SỬA LẠI
  * @param {string} reportType - Loại báo cáo
  * @param {Date} selectedDate - Ngày được chọn
  * @returns {string} Date range formatted
@@ -314,6 +328,9 @@ export const formatDateRange = (reportType, selectedDate) => {
                 year: 'numeric',
                 month: 'long'
             });
+
+        case 'yearly':
+            return `Năm ${date.getFullYear()}`;
 
         default:
             return date.toLocaleDateString('vi-VN');
@@ -350,7 +367,8 @@ export const subscribeToBills = (onBillChange) => {
         supabase.removeChannel(channel);
     };
 };
-// 
+
+// ...existing code... (giữ nguyên các hàm khác)
 export const createBill = async (bill) => {
     try {
         console.log('createBill input:', bill);
@@ -391,7 +409,6 @@ export const fetchBill = async () => {
     }
 }
 
-
 export const fetchBillByTimeRange = async (time) => {
     try {
         const targetDateTime = new Date(time);
@@ -417,6 +434,7 @@ export const fetchBillByTimeRange = async (time) => {
         return { success: false, msg: 'Có lỗi xảy ra khi lấy dữ liệu đặt bàn' };
     }
 };
+
 // detail
 export const fetchDetailByBillIds = async (billIds) => {
     try {

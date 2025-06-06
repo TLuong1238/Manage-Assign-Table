@@ -10,6 +10,7 @@ import MyButton from '../components/MyButton'
 import { useNavigation } from '@react-navigation/native'
 import { supabase } from '../lib/supabase'
 import { useRouter } from 'expo-router'
+import { checkAdminRole } from '../services/userService'
 
 const LoginScr = () => {
   const router = useRouter();
@@ -37,18 +38,22 @@ const LoginScr = () => {
 
     if (data.user) {
       const roleCheck = await checkAdminRole(data.user.id);
+      console.log('roleCheck', roleCheck);
+      console.log('data', data.user);
 
       setLoading(false);
       console.log('Đăng nhập thành công:', roleCheck.data);
       if (!roleCheck.success) {
         Alert.alert('Thông báo', 'Có lỗi xảy ra khi kiểm tra thông tin tài khoản!');
         await supabase.auth.signOut();
+        router.push('/loginScr');
         return;
       }
 
       if (!roleCheck.isAdmin) {
         Alert.alert('Thông báo', 'Tài khoản của bạn không có quyền đăng nhập!');
         await supabase.auth.signOut();
+        router.push('/loginScr');
         return;
       }
 

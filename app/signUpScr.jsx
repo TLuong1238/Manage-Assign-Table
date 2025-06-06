@@ -7,10 +7,8 @@ import BackButton from '../components/MyBackButton'
 import { hp, wp } from '../helper/common'
 import MyInput from '../components/MyInput'
 import MyButton from '../components/MyButton'
-import { useNavigation } from '@react-navigation/native'
-import { supabase } from '../lib/supabase'
 import { useRouter, useLocalSearchParams } from 'expo-router'
-import { TouchableOpacity } from 'react-native'
+import { supabase } from '../lib/supabase'
 
 const SignUpScr = () => {
   const router = useRouter();
@@ -73,20 +71,16 @@ const SignUpScr = () => {
     setLoading(true);
 
     try {
-
-      // send email
+      // Đăng ký với Supabase Auth
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: email,
         password: password,
         options: {
           data: {
             name: name,
-            email: email
           }
         }
       });
-
-      // console.log('SignUp response:', { signUpData, signUpError });
 
       if (signUpError) {
         if (signUpError.message.includes('already registered') ||
@@ -124,6 +118,19 @@ const SignUpScr = () => {
           Alert.alert('Lỗi đăng ký', signUpError.message);
         }
       } else {
+        // Thêm user vào bảng users sau khi đăng ký thành công
+        if (signUpData?.user) {
+          console.log('User signed up:', signUpData.user);
+          console.log(email, name);
+          await supabase
+            .from('users')
+            .insert([{
+              id: signUpData.user.id,
+              email: email,
+              name: name,
+              role: 'admin' 
+            }]);
+        }
         //send otp
         Alert.alert(
           'Đăng ký thành công!',
@@ -263,4 +270,4 @@ const styles = StyleSheet.create({
     fontSize: hp(2.5),
     fontWeight: '500',
   },
-})
+});
