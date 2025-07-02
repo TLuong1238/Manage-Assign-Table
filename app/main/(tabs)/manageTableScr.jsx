@@ -14,7 +14,6 @@ import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import ScreenWrapper from '../../../components/ScreenWrapper'
 import { hp, wp } from '../../../helper/common'
 import { theme } from '../../../constants/theme'
-import MyBackButton from '../../../components/MyBackButton'
 import MyTableItem from '../../../components/MyTableItem'
 import MaterialIcons from '@expo/vector-icons/MaterialIcons'
 import { useRouter } from 'expo-router'
@@ -48,14 +47,14 @@ const VISIT_STATUS = {
 
 const TABLE_STATUS = {
     EMPTY: 'empty',
-    RESERVED: 'reserved',       // in_order + on_process (đặt bàn)
-    OCCUPIED: 'occupied'        // in_order + visited (có khách)
+    RESERVED: 'reserved',       // in_order + on_process
+    OCCUPIED: 'occupied'        // in_order + visited
 };
 
 const BUSINESS_RULES = {
     autoCheckIntervalMs: 30000,           // 30s auto-check
-    reservationShowMinutes: 10,           // 10p hiển thị đặt bàn trước
-    autoCheckoutAfterMinutes: 40,         // 40p tự động checkout
+    reservationShowMinutes: 35,           // time before reservation
+    autoCheckoutAfterMinutes: 40,         // time after reservation
     statusUpdateDelay: 5000,
     errorStatusDelay: 3000
 };
@@ -95,30 +94,26 @@ const getTableStatusFromBill = (bill, referenceTime) => {
 
     console.log(`🔍 Table ${bill.tableid || 'unknown'}: Bill time=${billTime.toLocaleString('vi-VN')}, Reference time=${referenceTime.toLocaleString('vi-VN')}, minutesDiff=${minutesDiff}`);
 
-    // Logic mapping theo yêu cầu
+    // Logic mapping 
     if (bill.state === BILL_STATE.IN_ORDER) {
         if (bill.visit === VISIT_STATUS.ON_PROCESS) {
-            // in_order + on_process = RESERVED (đặt bàn)
-            // ✅ SỬA: Kiểm tra khoảng thời gian hợp lý
-            // Hiển thị đặt bàn từ 10p trước đến 40p sau thời gian đặt
+            // in_order + on_process = RESERVED 
+            // show reservation in range
             if (minutesDiff >= -BUSINESS_RULES.reservationShowMinutes &&
                 minutesDiff <= BUSINESS_RULES.autoCheckoutAfterMinutes) {
-                console.log(`✅ RESERVED: minutesDiff=${minutesDiff} trong khoảng [-${BUSINESS_RULES.reservationShowMinutes}, ${BUSINESS_RULES.autoCheckoutAfterMinutes}]`);
+                console.log(`RESERVED: minutesDiff=${minutesDiff} trong khoảng [-${BUSINESS_RULES.reservationShowMinutes}, ${BUSINESS_RULES.autoCheckoutAfterMinutes}]`);
                 return TABLE_STATUS.RESERVED;
             } else {
-                console.log(`❌ EMPTY: minutesDiff=${minutesDiff} ngoài khoảng cho phép`);
+                console.log(`EMPTY: minutesDiff=${minutesDiff} ngoài khoảng cho phép`);
                 return TABLE_STATUS.EMPTY;
             }
         }
         else if (bill.visit === VISIT_STATUS.VISITED) {
-            // in_order + visited = OCCUPIED (có khách)
-            console.log(`✅ OCCUPIED: in_order + visited`);
             return TABLE_STATUS.OCCUPIED;
         }
     }
 
     // completed/cancelled = empty
-    console.log(`✅ EMPTY: state=${bill.state}, visit=${bill.visit}`);
     return TABLE_STATUS.EMPTY;
 };
 
@@ -131,6 +126,7 @@ const manageTableScr = () => {
     const autoCheckIntervalRef = useRef(null);
     const channelRef = useRef(null);
     const isUnmountedRef = useRef(false);
+    const liveTimeIntervalRef = useRef(null); // THÊM MỚI
 
     // ===================
     // STATES
@@ -149,6 +145,7 @@ const manageTableScr = () => {
         showDatePicker: false,
         showTimePicker: false,
         isLiveMode: true,
+        currentLiveTime: new Date(), // THÊM MỚI
 
         // Auto-check state
         lastCheck: new Date(),
@@ -217,6 +214,28 @@ const manageTableScr = () => {
     }, []);
 
     // ===================
+    // LIVE TIME UPDATE - THÊM MỚI
+    // ===================
+    const startLiveTimeUpdate = useCallback(() => {
+        if (liveTimeIntervalRef.current) return;
+
+        updateState({ currentLiveTime: new Date() });
+
+        liveTimeIntervalRef.current = setInterval(() => {
+            if (!isUnmountedRef.current && state.isLiveMode) {
+                updateState({ currentLiveTime: new Date() });
+            }
+        }, 1000);
+    }, [state.isLiveMode, updateState]);
+
+    const stopLiveTimeUpdate = useCallback(() => {
+        if (liveTimeIntervalRef.current) {
+            clearInterval(liveTimeIntervalRef.current);
+            liveTimeIntervalRef.current = null;
+        }
+    }, []);
+
+    // ===================
     // DATA OPERATIONS
     // ===================
     const refreshTableData = useCallback(async () => {
@@ -243,7 +262,7 @@ const manageTableScr = () => {
             updateState({ tables: updatedTables });
             return true;
         } catch (error) {
-            console.error('❌ Refresh error:', error);
+            console.error('Refresh error:', error);
             return false;
         }
     }, [currentReferenceTime, updateState]);
@@ -267,7 +286,7 @@ const manageTableScr = () => {
                 Alert.alert('Lỗi', 'Không thể tải dữ liệu bàn');
             }
         } catch (error) {
-            console.error('❌ Load error:', error);
+            console.error('Load error:', error);
             Alert.alert('Lỗi', 'Không thể tải dữ liệu');
         }
 
@@ -294,10 +313,10 @@ const manageTableScr = () => {
 
                 if (!error) {
                     successCount++;
-                    console.log(`✅ ${update.type}: Bill ${update.id} - ${update.reason}`);
+                    console.log(`${update.type}: Bill ${update.id} - ${update.reason}`);
                 }
             } catch (error) {
-                console.error(`❌ Update error ${update.id}:`, error);
+                console.error(`Update error ${update.id}:`, error);
             }
         }
 
@@ -371,7 +390,7 @@ const manageTableScr = () => {
             }
 
         } catch (error) {
-            console.error('❌ Auto-check error:', error);
+            console.error('Auto-check error:', error);
             if (!isUnmountedRef.current) {
                 updateState({ autoCheckStatus: '✗ Lỗi' });
                 setTimeout(() => {
@@ -405,7 +424,7 @@ const manageTableScr = () => {
                 updateState({ lastCheck: new Date() });
                 await performAutoCheck();
             } else {
-                console.log('🛑 Auto-check stopped - not in live mode');
+                console.log('Auto-check stopped - not in live mode');
                 clearInterval(autoCheckIntervalRef.current);
                 autoCheckIntervalRef.current = null;
             }
@@ -416,7 +435,7 @@ const manageTableScr = () => {
         if (autoCheckIntervalRef.current) {
             clearInterval(autoCheckIntervalRef.current);
             autoCheckIntervalRef.current = null;
-            console.log('🛑 Auto-check stopped');
+            console.log('Auto-check stopped');
         }
     }, []);
 
@@ -462,14 +481,14 @@ const manageTableScr = () => {
             updateState({ selectedTable: null });
             const result = await action(billId);
             if (result.success) {
-                Alert.alert('✅ Thành công', successMessage);
+                Alert.alert('Thành công', successMessage);
                 await loadInitialData();
             } else {
-                Alert.alert('❌ Lỗi', result.msg || 'Không thể thực hiện thao tác');
+                Alert.alert('Lỗi', result.msg || 'Không thể thực hiện thao tác');
             }
         } catch (error) {
             console.error('Action error:', error);
-            Alert.alert('❌ Lỗi', 'Không thể thực hiện thao tác');
+            Alert.alert('Lỗi', 'Không thể thực hiện thao tác');
         }
     }, [loadInitialData, updateState]);
 
@@ -521,20 +540,34 @@ const manageTableScr = () => {
                             {state.selectedDateTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                         </Text>
                     </Pressable>
+                    
+                    {/* Nút refresh ở custom mode */}
+                    <Pressable style={styles.refreshButton} onPress={handleRefresh}>
+                        <MaterialIcons name="refresh" size={16} color={theme.colors.primary} />
+                    </Pressable>
                 </View>
             )}
 
             {state.isLiveMode && (
-                <Text style={styles.liveTimeDisplay}>
-                    {new Date().toLocaleString('vi-VN', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit'
-                    })}
-                </Text>
+                <View style={styles.liveTimeContainer}>
+                    <Text style={styles.liveTimeDisplay}>
+                        {state.currentLiveTime.toLocaleString('vi-VN', {
+                            weekday: 'short',
+                            day: '2-digit',
+                            month: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit'
+                        })}
+                    </Text>
+                    {/* Nút refresh ở live mode */}
+                    <Pressable style={styles.refreshButton} onPress={handleRefresh}>
+                        <MaterialIcons name="refresh" size={16} color={theme.colors.primary} />
+                    </Pressable>
+                </View>
             )}
         </View>
-    ), [state.isLiveMode, state.selectedDateTime, toggleLiveMode, updateState]);
+    ), [state.isLiveMode, state.selectedDateTime, state.currentLiveTime, toggleLiveMode, updateState, handleRefresh]);
 
     const StatsBar = useMemo(() => (
         <View style={styles.statsBar}>
@@ -816,13 +849,10 @@ const manageTableScr = () => {
 
     const StatusLegend = useMemo(() => (
         <View style={styles.legend}>
-            <Text style={styles.legendTitle}>
-                Logic: in_order+on_process=đặt, in_order+visited=có khách, completed/cancelled=trống
-            </Text>
             <View style={styles.legendItems}>
                 {Object.values(TABLE_STATUS).map(status => {
                     const config = TABLE_STATUS_CONFIG[status];
-                    const rule = status === TABLE_STATUS.RESERVED ? ' (10p trước)' :
+                    const rule = status === TABLE_STATUS.RESERVED ? ' (35p trước)' :
                         status === TABLE_STATUS.OCCUPIED ? ' (40p tối đa)' : '';
 
                     return (
@@ -839,6 +869,19 @@ const manageTableScr = () => {
     // ===================
     // EFFECTS
     // ===================
+    // Live time update effect - THÊM MỚI
+    useEffect(() => {
+        if (state.isLiveMode) {
+            startLiveTimeUpdate();
+        } else {
+            stopLiveTimeUpdate();
+        }
+
+        return () => {
+            stopLiveTimeUpdate();
+        };
+    }, [state.isLiveMode, startLiveTimeUpdate, stopLiveTimeUpdate]);
+
     useEffect(() => {
         isUnmountedRef.current = false;
         loadInitialData();
@@ -850,17 +893,18 @@ const manageTableScr = () => {
                 channelRef.current = null;
             }
             stopAutoCheck();
+            stopLiveTimeUpdate(); // THÊM MỚI
         };
-    }, [loadInitialData, stopAutoCheck]);
+    }, [loadInitialData, stopAutoCheck, stopLiveTimeUpdate]);
 
-    // Refresh khi thay đổi thời gian (chỉ khi không phải live mode)
+    // Refresh when change time (not in live mode)
     useEffect(() => {
         if (!state.isLiveMode && !isUnmountedRef.current) {
             refreshTableData();
         }
     }, [state.selectedDateTime, state.isLiveMode, refreshTableData]);
 
-    // Setup auto-check và real-time khi chuyển về live mode
+    // Setup auto-check and real-time when switching to live mode
     useEffect(() => {
         console.log('🔧 Setting up live mode:', state.isLiveMode);
 
@@ -872,7 +916,7 @@ const manageTableScr = () => {
         }
 
         if (state.isLiveMode && !isUnmountedRef.current) {
-            // Refresh ngay khi chuyển về live mode
+            // Refresh live mode
             refreshTableData();
 
             // Start auto-check
@@ -922,7 +966,7 @@ const manageTableScr = () => {
     return (
         <ScreenWrapper bg={'#FFBF00'}>
             <View style={styles.container}>
-                {/* Header */}
+                {/* Header - BỎ NÚT REFRESH */}
                 <View style={styles.header}>
                     <View style={styles.titleContainer}>
                         <Text style={styles.title}>Quản lý bàn</Text>
@@ -937,9 +981,6 @@ const manageTableScr = () => {
                             </Text>
                         </View>
                     </View>
-                    <Pressable style={styles.actionButton} onPress={handleRefresh}>
-                        <MaterialIcons name="refresh" size={20} color={theme.colors.text} />
-                    </Pressable>
                 </View>
 
                 {/* DateTime Controls */}
@@ -1003,7 +1044,7 @@ const manageTableScr = () => {
 export default manageTableScr;
 
 // ===================
-// STYLES
+// STYLES - THÊM MỚI CHO LIVE TIME VÀ REFRESH BUTTON
 // ===================
 const styles = StyleSheet.create({
     container: {
@@ -1016,7 +1057,7 @@ const styles = StyleSheet.create({
         alignItems: 'center'
     },
 
-    // Header
+    // Header - BỎ actionButton
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -1049,13 +1090,8 @@ const styles = StyleSheet.create({
         fontSize: 9,
         fontWeight: '500'
     },
-    actionButton: {
-        padding: 8,
-        borderRadius: 15,
-        backgroundColor: 'rgba(255,255,255,0.3)'
-    },
 
-    // DateTime Controls
+    // DateTime Controls - THÊM MỚI
     dateTimeControls: {
         backgroundColor: 'rgba(255,255,255,0.95)',
         paddingVertical: 8,
@@ -1108,15 +1144,33 @@ const styles = StyleSheet.create({
         color: theme.colors.text,
         fontWeight: '500'
     },
+    
+    // Live Time Container - THÊM MỚI
+    liveTimeContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        flex: 1,
+        justifyContent: 'flex-end'
+    },
     liveTimeDisplay: {
         fontSize: 12,
         fontWeight: '600',
         color: '#2ecc71',
         backgroundColor: 'rgba(46, 204, 113, 0.1)',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
         borderRadius: 8,
-        fontFamily: 'monospace'
+        fontFamily: 'monospace',
+        borderWidth: 1,
+        borderColor: 'rgba(46, 204, 113, 0.3)'
+    },
+    refreshButton: {
+        padding: 6,
+        borderRadius: 12,
+        backgroundColor: 'rgba(46, 204, 113, 0.1)',
+        borderWidth: 1,
+        borderColor: 'rgba(46, 204, 113, 0.3)'
     },
 
     // Stats Bar

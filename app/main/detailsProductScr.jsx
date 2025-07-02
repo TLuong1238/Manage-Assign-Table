@@ -44,7 +44,7 @@ const detailsProductScr = () => {
     // Lấy thông tin sản phẩm nếu là chế độ sửa
     useEffect(() => {
         const loadProduct = async () => {
-            if (isEditMode && productId && categories.length > 0) { // Thêm điều kiện categories.length > 0
+            if (isEditMode && productId && categories.length > 0) { 
                 setInitialLoading(true);
                 const result = await getProductById(productId);
                 if (result.success) {
@@ -274,7 +274,7 @@ const detailsProductScr = () => {
                                         )}
                                     </Pressable>
 
-                                    {/* Delete Image Button - Hiển thị dấu X khi có ảnh */}
+                                    {/* Delete Image Button */}
                                     {selectedImage && (
                                         <Pressable style={styles.deleteImageButton} onPress={removeImage}>
                                             <MaterialIcons name="close" size={20} color="white" />
@@ -542,7 +542,7 @@ const styles = StyleSheet.create({
     imageWrapper: {
         position: 'relative',
         alignItems: 'center',
-        padding: 10, // Thêm padding để dấu X không bị cắt
+        padding: 10, 
     },
     imageContainer: {
         width: 120,
@@ -556,13 +556,13 @@ const styles = StyleSheet.create({
         backgroundColor: '#f8f9fa',
     },
     imageContainerWithImage: {
-        borderWidth: 0, // Xóa viền khi đã có ảnh
+        borderWidth: 0, 
         borderStyle: 'solid',
     },
     deleteImageButton: {
         position: 'absolute',
-        top: 5, // Điều chỉnh để không bị cắt
-        right: 5, // Điều chỉnh để không bị cắt
+        top: 5, 
+        right: 5,
         width: 30,
         height: 30,
         borderRadius: 15,

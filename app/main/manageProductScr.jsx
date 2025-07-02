@@ -7,7 +7,7 @@ import MyBackButton from '../../components/MyBackButton'
 import * as Icon from 'react-native-feather'
 import MaterialIcons from '@expo/vector-icons/MaterialIcons'
 import { useRouter } from 'expo-router'
-import { fetchProduct, searchProducts, deleteProduct } from '../../services/productService'
+import { fetchProduct, searchProducts, deleteProduct, updateProductFavorite } from '../../services/productService'
 import { fetchCate } from '../../services/cateService'
 import { useDebounce } from '../../hook/useDebounce'
 
@@ -29,8 +29,8 @@ const manageProductScr = () => {
         setLoading(true);
         const result = await fetchProduct();
         if (result.success) {
-            setAllProducts(result.data); // Lưu toàn bộ
-            setProducts(result.data); // Hiển thị ban đầu
+            setAllProducts(result.data);
+            setProducts(result.data);
         } else {
             Alert.alert('Lỗi', result.msg);
         }
@@ -50,6 +50,10 @@ const manageProductScr = () => {
         if (!categoryId) {
             // Nếu không chọn danh mục, hiển thị tất cả
             setProducts(allProducts);
+        } else if (categoryId === 'favorites') {
+            // Lọc món ăn ưa thích
+            const filtered = allProducts.filter(product => product.isFavor === true);
+            setProducts(filtered);
         } else {
             // Lọc theo danh mục
             const filtered = allProducts.filter(product => product.cateId === categoryId);
@@ -177,7 +181,36 @@ const manageProductScr = () => {
             currency: 'VND'
         }).format(price);
     };
+    //Yêu thich sản phẩm
+    const toggleFavorite = useCallback(async (product) => {
+        try {
+            // Gọi API update isFavor (cần tạo service này)
+            const result = await updateProductFavorite(product.id, !product.isFavor);
 
+            if (result.success) {
+                // Cập nhật local state
+                const updatedAllProducts = allProducts.map(p =>
+                    p.id === product.id ? { ...p, isFavor: !p.isFavor } : p
+                );
+                setAllProducts(updatedAllProducts);
+
+                // Áp dụng lại filter hiện tại
+                if (selectedCategory?.id === 'favorites') {
+                    const filtered = updatedAllProducts.filter(p => p.isFavor === true);
+                    setProducts(filtered);
+                } else if (selectedCategory) {
+                    const filtered = updatedAllProducts.filter(p => p.cateId === selectedCategory.id);
+                    setProducts(filtered);
+                } else {
+                    setProducts(updatedAllProducts);
+                }
+            } else {
+                Alert.alert('Lỗi', result.msg);
+            }
+        } catch (error) {
+            Alert.alert('Lỗi', 'Không thể cập nhật trạng thái yêu thích');
+        }
+    }, [allProducts, selectedCategory]);
     // Render item sản phẩm
     const renderProductItem = ({ item }) => (
         <Pressable
@@ -212,12 +245,32 @@ const manageProductScr = () => {
                 </Text>
             </View>
 
-            <Pressable
-                style={styles.deleteButton}
-                onPress={() => handleDeleteProduct(item)}
-            >
-                <MaterialIcons name="delete" size={24} color="#ff4757" />
-            </Pressable>
+            {/* Thêm container cho các nút action */}
+            <View style={styles.actionButtons}>
+                <Pressable
+                    style={styles.favoriteButton}
+                    onPress={(e) => {
+                        e.stopPropagation();
+                        toggleFavorite(item);
+                    }}
+                >
+                    <MaterialIcons
+                        name={item.isFavor ? "favorite" : "favorite-border"}
+                        size={24}
+                        color={item.isFavor ? "#e74c3c" : "#bdc3c7"}
+                    />
+                </Pressable>
+
+                <Pressable
+                    style={styles.deleteButton}
+                    onPress={(e) => {
+                        e.stopPropagation();
+                        handleDeleteProduct(item);
+                    }}
+                >
+                    <MaterialIcons name="delete" size={24} color="#ff4757" />
+                </Pressable>
+            </View>
         </Pressable>
     );
 
@@ -333,6 +386,33 @@ const manageProductScr = () => {
                                     )}
                                 </TouchableOpacity>
 
+                                {/* THÊM MỚI - Option "Món ăn ưa thích" */}
+                                <TouchableOpacity
+                                    style={[
+                                        styles.categoryOption,
+                                        selectedCategory?.id === 'favorites' && styles.selectedCategoryOption
+                                    ]}
+                                    onPress={() => selectCategory({ id: 'favorites', name: 'Món ăn ưa thích' })}
+                                >
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <MaterialIcons
+                                            name="favorite"
+                                            size={18}
+                                            color="#e74c3c"
+                                            style={{ marginRight: 8 }}
+                                        />
+                                        <Text style={[
+                                            styles.categoryOptionText,
+                                            selectedCategory?.id === 'favorites' && styles.selectedCategoryOptionText
+                                        ]}>
+                                            Món ăn ưa thích
+                                        </Text>
+                                    </View>
+                                    {selectedCategory?.id === 'favorites' && (
+                                        <MaterialIcons name="check" size={20} color={theme.colors.primary} />
+                                    )}
+                                </TouchableOpacity>
+
                                 {/* Danh sách các danh mục */}
                                 {categories.map(category => (
                                     <TouchableOpacity
@@ -353,6 +433,7 @@ const manageProductScr = () => {
                                             <MaterialIcons name="check" size={20} color={theme.colors.primary} />
                                         )}
                                     </TouchableOpacity>
+
                                 ))}
                             </View>
                         </View>
@@ -591,5 +672,21 @@ const styles = StyleSheet.create({
     selectedCategoryOptionText: {
         color: theme.colors.primary,
         fontWeight: '600',
+    },
+    actionButtons: {
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 10,
+    },
+    favoriteButton: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 8,
+    },
+    deleteButton: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 8,
     },
 });

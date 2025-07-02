@@ -25,7 +25,7 @@ export default function TabsLayout() {
         },
       }}
     >
-      {/* Tab Trang chủ */}
+      {/* Home */}
       <Tabs.Screen
         name="index"
         options={{
@@ -35,7 +35,7 @@ export default function TabsLayout() {
           ),
         }}
       />
-      {/* Mạng */}
+      {/* manage Social */}
       <Tabs.Screen
         name="managePostScr"
         options={{
@@ -46,7 +46,7 @@ export default function TabsLayout() {
         }}
       />
 
-      {/* notifi */}
+      {/* report */}
       <Tabs.Screen
         name="reportScr"
         options={{
@@ -56,7 +56,7 @@ export default function TabsLayout() {
           ),
         }}
       />
-      {/* history */}
+      {/* manage Table */}
       <Tabs.Screen
         name="manageTableScr"
         options={{

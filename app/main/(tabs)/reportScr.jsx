@@ -42,7 +42,7 @@ const reportScr = () => {
 
   useEffect(() => {
     const cleanup = subscribeToBills((payload) => {
-      console.log('📊 Bills changed, refreshing report...');
+      // console.log('📊 Bills changed, refreshing report...');
       loadBillsData();
     });
     return cleanup;
@@ -59,7 +59,7 @@ const reportScr = () => {
   const loadBillsData = async () => {
     setLoading(true);
     try {
-      console.log(`📊 Loading ${reportType} report for ${selectedDate.toDateString()}`);
+      // console.log(`Loading ${reportType} report for ${selectedDate.toDateString()}`);
 
       const result = await getBillsByReportType(reportType, selectedDate);
 
@@ -67,13 +67,13 @@ const reportScr = () => {
         setBills(result.data);
         const calculatedStats = calculateAllStats(result.data);
         setStats(calculatedStats);
-        console.log(`✅ Report loaded: ${result.data.length} bills`);
+        // console.log(`Report loaded: ${result.data.length} bills`);
       } else {
-        console.error('❌ Error loading report:', result.msg);
+        console.error('Error loading report:', result.msg);
         Alert.alert('Lỗi', result.msg || 'Không thể tải dữ liệu báo cáo');
       }
     } catch (error) {
-      console.error('❌ Unexpected error loading report:', error);
+      console.error('Unexpected error loading report:', error);
       Alert.alert('Lỗi', 'Lỗi không xác định khi tải báo cáo');
     }
     setLoading(false);

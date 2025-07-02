@@ -173,7 +173,7 @@ const AssignTableScr = () => {
       );
 
     } catch (error) {
-      Alert.alert('❌ Lỗi cập nhật', error.message);
+      Alert.alert('Lỗi cập nhật', error.message);
     }
   }, [billId, cart, formState.note, originalBillData, router, isUpdateMode]);
 

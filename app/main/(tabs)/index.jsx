@@ -181,7 +181,7 @@ const index = () => {
         hideDatePanelWithAnimation()
     }
 
-    // ✅ Quick date presets
+    // Quick date presets
     const setDatePreset = (days) => {
         const today = new Date()
         const pastDate = new Date()
@@ -191,7 +191,7 @@ const index = () => {
         setToDate(today)
     }
 
-    // ✅ Helper functions
+    //Helper functions
     const getTableName = useCallback((tableId) => {
         const table = tables.find(t => t.id === tableId)
         return table?.name || `Bàn ${tableId}`
@@ -242,7 +242,7 @@ const index = () => {
         }
     }, [fetchBills])
 
-    // ✅ Components
+    //Components
     const BillInfoRow = ({ icon, text, iconColor = '#666', textStyle = {} }) => {
         const IconComponent = Icon[icon]
         return (
@@ -296,7 +296,7 @@ const index = () => {
         </View>
     )
 
-    // ✅ Animated Date Panel - Không dùng Modal
+    // Animated Date Panel 
     const AnimatedDatePanel = () => {
         if (!showDatePanel) return null
 
@@ -448,7 +448,7 @@ const index = () => {
         )
     }
 
-    // ✅ Render bill item
+    // Render bill item
     const renderBillItem = useCallback(({ item, index }) => {
         const billStatus = getBillStatus(item.state, item.visit)
         const timeStatus = TimeUtils.calculateTimeStatus(item.time)

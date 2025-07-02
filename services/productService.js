@@ -160,3 +160,22 @@ export const getProductById = async (productId) => {
         return {success: false, msg: error.message};
     }
 }
+//thích sản phẩm
+export const updateProductFavorite = async (productId, isFavor) => {
+    try {
+        const { data, error } = await supabase
+            .from('products')
+            .update({ isFavor: isFavor })
+            .eq('id', productId)
+            .select();
+
+        if (error) {
+            return { success: false, msg: error.message };
+        }
+
+        return { success: true, data: data[0] };
+    } catch (error) {
+        console.log('updateProductFavorite error: ', error);
+        return { success: false, msg: error.message };
+    }
+};
