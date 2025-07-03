@@ -44,6 +44,7 @@ const detailsUserScr = () => {
 
   const roleOptions = [
     { value: 'admin', label: 'Admin' },
+    { value: 'vip', label: 'Khách hàng thân thiết' },
     { value: 'user', label: 'Người dùng' }
   ];
 

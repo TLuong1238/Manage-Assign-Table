@@ -1,4 +1,4 @@
-import { Alert, FlatList, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Alert, FlatList, Image, Pressable, StyleSheet, Text, TextInput, View, Modal, TouchableOpacity } from 'react-native'
 import React, { useEffect, useState } from 'react'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { hp, wp } from '../../helper/common'
@@ -7,7 +7,7 @@ import MyBackButton from '../../components/MyBackButton'
 import * as Icon from 'react-native-feather'
 import MaterialIcons from '@expo/vector-icons/MaterialIcons'
 import { useRouter } from 'expo-router'
-import { fetchUsers, searchUsers, deleteUser } from '../../services/userService'
+import { fetchUsers, searchUsers, deleteUser, updateRole } from '../../services/userService'
 import { useDebounce } from '../../hook/useDebounce'
 import { getUserImageSrc } from '../../services/imageService'
 
@@ -17,6 +17,8 @@ const manageUserScr = () => {
     const [loading, setLoading] = useState(false);
     const [searchText, setSearchText] = useState('');
     const [refreshing, setRefreshing] = useState(false);
+    const [showRoleModal, setShowRoleModal] = useState(false);
+    const [selectedUser, setSelectedUser] = useState(null);
 
     // Sử dụng debounce với delay 500ms
     const debouncedSearchText = useDebounce(searchText, 500);
@@ -69,7 +71,7 @@ const manageUserScr = () => {
     const handleDeleteUser = (user) => {
         Alert.alert(
             'Xác nhận xóa',
-            `Bạn có chắc chắn muốn xóa tài khoản "${user.username}"?`,
+            `Bạn có chắc chắn muốn xóa tài khoản "${user.name}"?`,
             [
                 { text: 'Hủy', style: 'cancel' },
                 {
@@ -118,11 +120,39 @@ const manageUserScr = () => {
         setRefreshing(false);
     };
 
+    // Xử lý thay đổi role
+    const handleChangeRole = (user) => {
+        setSelectedUser(user);
+        setShowRoleModal(true);
+    };
+
+    const updateUserRole = async (newRole) => {
+        if (!selectedUser) return;
+        
+        try {
+            setLoading(true);
+            const result = await updateRole(selectedUser.id, newRole);
+            
+            if (result.success) {
+                Alert.alert('Thành công', `Đã cập nhật quyền thành ${newRole}`);
+                await getUsers(); // Refresh danh sách
+            } else {
+                Alert.alert('Lỗi', result.msg);
+            }
+        } catch (error) {
+            Alert.alert('Lỗi', 'Không thể cập nhật quyền');
+        } finally {
+            setLoading(false);
+            setShowRoleModal(false);
+            setSelectedUser(null);
+        }
+    };
+
     // Render role badge
     const renderRoleBadge = (role) => {
         const roleConfig = {
             admin: { color: '#e74c3c', text: 'Admin' },
-            manager: { color: '#f39c12', text: 'Quản lý' },
+            vip: { color: '#f39c12', text: 'Khách hàng thân thiết' },
             user: { color: '#27ae60', text: 'Người dùng' }
         };
 
@@ -154,7 +184,6 @@ const manageUserScr = () => {
 
     // Render item tài khoản
     const renderUserItem = ({ item }) => {
-        // Sử dụng getUserImageSrc từ imageService
         const imageSource = getUserImageSrc(item.image);
 
         return (
@@ -190,12 +219,27 @@ const manageUserScr = () => {
                     </Text>
                 </View>
 
-                <Pressable
-                    style={styles.deleteButton}
-                    onPress={() => handleDeleteUser(item)}
-                >
-                    <MaterialIcons name="delete" size={24} color="#ff4757" />
-                </Pressable>
+                <View style={styles.actionButtons}>
+                    <Pressable
+                        style={styles.roleButton}
+                        onPress={(e) => {
+                            e.stopPropagation();
+                            handleChangeRole(item);
+                        }}
+                    >
+                        <MaterialIcons name="admin-panel-settings" size={24} color="#3498db" />
+                    </Pressable>
+                    
+                    <Pressable
+                        style={styles.deleteButton}
+                        onPress={(e) => {
+                            e.stopPropagation();
+                            handleDeleteUser(item);
+                        }}
+                    >
+                        <MaterialIcons name="delete" size={24} color="#ff4757" />
+                    </Pressable>
+                </View>
             </Pressable>
         );
     };
@@ -249,6 +293,53 @@ const manageUserScr = () => {
                         }
                     />
                 </View>
+
+                {/* Role Selection Modal */}
+                <Modal
+                    visible={showRoleModal}
+                    transparent={true}
+                    animationType="slide"
+                    onRequestClose={() => setShowRoleModal(false)}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContent}>
+                            <View style={styles.modalHeader}>
+                                <Text style={styles.modalTitle}>Chọn quyền cho {selectedUser?.name}</Text>
+                                <Pressable onPress={() => setShowRoleModal(false)}>
+                                    <MaterialIcons name="close" size={24} color={theme.colors.dark} />
+                                </Pressable>
+                            </View>
+
+                            <View style={styles.roleOptions}>
+                                {[
+                                    { value: 'user', label: 'Người dùng', color: '#27ae60' },
+                                    { value: 'vip', label: 'Khách hàng thân thiết', color: '#f39c12' },
+                                    { value: 'admin', label: 'Admin', color: '#e74c3c' }
+                                ].map((role) => (
+                                    <TouchableOpacity
+                                        key={role.value}
+                                        style={[
+                                            styles.roleOption,
+                                            selectedUser?.role === role.value && styles.selectedRoleOption
+                                        ]}
+                                        onPress={() => updateUserRole(role.value)}
+                                    >
+                                        <View style={[styles.roleIndicator, { backgroundColor: role.color }]} />
+                                        <Text style={[
+                                            styles.roleOptionText,
+                                            selectedUser?.role === role.value && styles.selectedRoleOptionText
+                                        ]}>
+                                            {role.label}
+                                        </Text>
+                                        {selectedUser?.role === role.value && (
+                                            <MaterialIcons name="check" size={20} color={theme.colors.primary} />
+                                        )}
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        </View>
+                    </View>
+                </Modal>
 
                 {/* Floating Add Button */}
                 <Pressable
@@ -380,15 +471,25 @@ const styles = StyleSheet.create({
         color: theme.colors.textLight,
         marginBottom: 8,
     },
-
     userDate: {
         fontSize: 11,
         color: theme.colors.textLight,
     },
+    actionButtons: {
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 10,
+    },
+    roleButton: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 8,
+    },
     deleteButton: {
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 10,
+        padding: 8,
     },
     emptyContainer: {
         flex: 1,
@@ -424,5 +525,66 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 6,
+    },
+    // Modal styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalContent: {
+        backgroundColor: 'white',
+        borderRadius: 15,
+        padding: 0,
+        width: wp(85),
+        maxHeight: hp(60),
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f0f0f0',
+    },
+    modalTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: theme.colors.text,
+        flex: 1,
+    },
+    roleOptions: {
+        padding: 20,
+    },
+    roleOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 15,
+        paddingHorizontal: 15,
+        borderRadius: 10,
+        marginBottom: 10,
+        backgroundColor: '#f8f9fa',
+    },
+    selectedRoleOption: {
+        backgroundColor: '#e3f2fd',
+        borderWidth: 1,
+        borderColor: theme.colors.primary,
+    },
+    roleIndicator: {
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        marginRight: 12,
+    },
+    roleOptionText: {
+        fontSize: 16,
+        color: theme.colors.text,
+        flex: 1,
+    },
+    selectedRoleOptionText: {
+        fontWeight: '600',
+        color: theme.colors.primary,
     },
 });

@@ -159,21 +159,42 @@ export const checkEmailExists = async (email, excludeUserId = null) => {
         return {success: false, msg: error.message};
     }
 }
-// 
+
+// Kiểm tra role admin
 export const checkAdminRole = async (userId) => {
-  try {
-    const { data, error } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', userId)
-      .single();
+    try {
+        const { data, error } = await supabase
+            .from('users')
+            .select('role')
+            .eq('id', userId)
+            .single();
 
-    if (error || !data) {
-      return { success: false, isAdmin: false };
+        if (error || !data) {
+            return { success: false, isAdmin: false };
+        }
+
+        return { success: true, isAdmin: data.role === 'admin' };
+    } catch (e) {
+        return { success: false, isAdmin: false };
     }
+};
 
-    return { success: true, isAdmin: data.role === 'admin' };
-  } catch (e) {
-    return { success: false, isAdmin: false };
-  }
+// Cập nhật role của user
+export const updateRole = async (userId, newRole) => {
+    try {
+        const { data, error } = await supabase
+            .from('users')
+            .update({ role: newRole })
+            .eq('id', userId)
+            .select();
+
+        if (error) {
+            return { success: false, msg: error.message };
+        }
+
+        return { success: true, data: data[0] };
+    } catch (error) {
+        console.error('Error updating user role:', error);
+        return { success: false, msg: error.message };
+    }
 };
