@@ -25,7 +25,7 @@ const index = () => {
     const [tables, setTables] = useState([])
     const [details, setDetails] = useState([])
     const [loading, setLoading] = useState(false)
-    
+
     const [showDatePanel, setShowDatePanel] = useState(false)
     const [fromDate, setFromDate] = useState(new Date())
     const [toDate, setToDate] = useState(new Date())
@@ -49,7 +49,7 @@ const index = () => {
             const billDate = new Date(bill.created_at || bill.time)
             const from = new Date(fromDate.setHours(0, 0, 0, 0))
             const to = new Date(toDate.setHours(23, 59, 59, 999))
-            
+
             return billDate >= from && billDate <= to
         })
 
@@ -186,7 +186,7 @@ const index = () => {
         const today = new Date()
         const pastDate = new Date()
         pastDate.setDate(today.getDate() - days)
-        
+
         setFromDate(pastDate)
         setToDate(today)
     }
@@ -242,6 +242,52 @@ const index = () => {
         }
     }, [fetchBills])
 
+    // THÊM MỚI - Hàm xác nhận thanh toán tại quầy
+    const handleConfirmCounterPayment = useCallback(async (billId) => {
+        try {
+            const { supabase } = await import('../../../lib/supabase')
+            const { error } = await supabase
+                .from('bills')
+                .update({
+                    payment_status: 'counter_payment',
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', billId)
+
+            if (error) {
+                console.error('Confirm counter payment error:', error)
+                return
+            }
+
+            fetchBills()
+        } catch (error) {
+            console.error('handleConfirmCounterPayment error:', error)
+        }
+    }, [fetchBills])
+
+    // THÊM MỚI - Helper functions để hiển thị trạng thái thanh toán
+    const getPaymentStatusText = (paymentStatus) => {
+        const statusMap = {
+            'pending': 'Chờ thanh toán',
+            'deposit_paid': 'Đã đặt cọc',
+            'fully_paid': 'Đã thanh toán',
+            'counter_payment': 'Thanh toán tại quầy',
+            'pending_counter': 'Chờ xác nhận TT'
+        }
+        return statusMap[paymentStatus] || 'Không xác định'
+    }
+
+    const getPaymentStatusColor = (paymentStatus) => {
+        const colorMap = {
+            'pending': '#f39c12',
+            'deposit_paid': '#3498db',
+            'fully_paid': '#27ae60',
+            'counter_payment': '#27ae60',
+            'pending_counter': '#e67e22'
+        }
+        return colorMap[paymentStatus] || '#95a5a6'
+    }
+
     //Components
     const BillInfoRow = ({ icon, text, iconColor = '#666', textStyle = {} }) => {
         const IconComponent = Icon[icon]
@@ -274,36 +320,35 @@ const index = () => {
         )
     }
 
-    const ActionButtons = ({ item, timeStatus, onCancel, onArrived }) => (
-        <View style={styles.actionButtons}>
-            <Pressable
-                style={[styles.actionButton, styles.cancelButton]}
-                onPress={() => onCancel(item.id)}
-                android_ripple={{ color: 'rgba(255,255,255,0.2)' }}
-            >
-                <Icon.X stroke="white" width={16} height={16} />
-                <Text style={styles.actionButtonText}>Hủy</Text>
-            </Pressable>
+    // SỬA LẠI - Component ActionButtons để thêm nút xác nhận thanh toán
+    const ActionButtons = ({ item, timeStatus, onCancel, onArrived, onConfirmPayment }) => {
+        const showPaymentConfirm = item.payment_status === 'pending_counter'
 
-            <Pressable
-                style={[styles.actionButton, styles.arrivedButton]}
-                onPress={() => onArrived(item.id)}
-                android_ripple={{ color: 'rgba(255,255,255,0.2)' }}
-            >
-                <Icon.Check stroke="white" width={16} height={16} />
-                <Text style={styles.actionButtonText}>Đã đến</Text>
-            </Pressable>
-        </View>
-    )
+        // Chỉ hiển thị nút xác nhận thanh toán
+        if (!showPaymentConfirm) return null
+
+        return (
+            <View style={styles.actionButtons}>
+                <Pressable
+                    style={[styles.actionButton, styles.confirmPaymentButton]}
+                    onPress={() => onConfirmPayment(item.id)}
+                    android_ripple={{ color: 'rgba(255,255,255,0.2)' }}
+                >
+                    <MaterialIcons name="payment" size={16} color="white" />
+                    <Text style={styles.actionButtonText}>Xác nhận thanh toán</Text>
+                </Pressable>
+            </View>
+        )
+    }
 
     // Animated Date Panel 
     const AnimatedDatePanel = () => {
         if (!showDatePanel) return null
 
         return (
-            <Animated.View 
+            <Animated.View
                 style={[
-                    styles.datePanel, 
+                    styles.datePanel,
                     {
                         transform: [{ translateY: slideAnim }],
                         opacity: fadeAnim
@@ -312,24 +357,24 @@ const index = () => {
             >
                 <View style={styles.datePanelContent}>
                     <Text style={styles.datePanelTitle}>Chọn khoảng thời gian</Text>
-                    
+
                     {/* Quick Presets */}
                     <View style={styles.presetsContainer}>
-                        <Pressable 
+                        <Pressable
                             style={styles.presetButton}
                             onPress={() => setDatePreset(1)}
                             android_ripple={{ color: '#e3f2fd' }}
                         >
                             <Text style={styles.presetText}>Hôm qua</Text>
                         </Pressable>
-                        <Pressable 
+                        <Pressable
                             style={styles.presetButton}
                             onPress={() => setDatePreset(7)}
                             android_ripple={{ color: '#e3f2fd' }}
                         >
                             <Text style={styles.presetText}>7 ngày</Text>
                         </Pressable>
-                        <Pressable 
+                        <Pressable
                             style={styles.presetButton}
                             onPress={() => setDatePreset(30)}
                             android_ripple={{ color: '#e3f2fd' }}
@@ -343,7 +388,7 @@ const index = () => {
                         {/* From Date */}
                         <View style={styles.dateInputGroup}>
                             <Text style={styles.dateLabel}>Từ ngày:</Text>
-                            <Pressable 
+                            <Pressable
                                 style={[
                                     styles.dateDisplayButton,
                                     showFromPicker && styles.dateDisplayButtonActive
@@ -351,10 +396,10 @@ const index = () => {
                                 onPress={selectFromDate}
                                 android_ripple={{ color: '#e3f2fd' }}
                             >
-                                <Icon.Calendar 
-                                    stroke={showFromPicker ? theme.colors.primary : "#666"} 
-                                    width={18} 
-                                    height={18} 
+                                <Icon.Calendar
+                                    stroke={showFromPicker ? theme.colors.primary : "#666"}
+                                    width={18}
+                                    height={18}
                                 />
                                 <Text style={[
                                     styles.dateDisplayText,
@@ -368,7 +413,7 @@ const index = () => {
                         {/* To Date */}
                         <View style={styles.dateInputGroup}>
                             <Text style={styles.dateLabel}>Đến ngày:</Text>
-                            <Pressable 
+                            <Pressable
                                 style={[
                                     styles.dateDisplayButton,
                                     showToPicker && styles.dateDisplayButtonActive
@@ -376,10 +421,10 @@ const index = () => {
                                 onPress={selectToDate}
                                 android_ripple={{ color: '#e3f2fd' }}
                             >
-                                <Icon.Calendar 
-                                    stroke={showToPicker ? theme.colors.primary : "#666"} 
-                                    width={18} 
-                                    height={18} 
+                                <Icon.Calendar
+                                    stroke={showToPicker ? theme.colors.primary : "#666"}
+                                    width={18}
+                                    height={18}
                                 />
                                 <Text style={[
                                     styles.dateDisplayText,
@@ -393,15 +438,15 @@ const index = () => {
 
                     {/* Action Buttons */}
                     <View style={styles.datePanelActions}>
-                        <Pressable 
+                        <Pressable
                             style={styles.clearPanelButton}
                             onPress={clearDateFilter}
                             android_ripple={{ color: '#f0f0f0' }}
                         >
                             <Text style={styles.clearPanelButtonText}>Xóa bộ lọc</Text>
                         </Pressable>
-                        
-                        <Pressable 
+
+                        <Pressable
                             style={styles.applyPanelButton}
                             onPress={applyDateFilter}
                             android_ripple={{ color: 'rgba(255,255,255,0.2)' }}
@@ -411,7 +456,7 @@ const index = () => {
                     </View>
 
                     {/* Close Button */}
-                    <Pressable 
+                    <Pressable
                         style={styles.closePanelButton}
                         onPress={hideDatePanelWithAnimation}
                         android_ripple={{ color: '#f0f0f0', radius: 20 }}
@@ -448,7 +493,7 @@ const index = () => {
         )
     }
 
-    // Render bill item
+    // SỬA LẠI - Render bill item để hiển thị trạng thái thanh toán và thêm nút xác nhận
     const renderBillItem = useCallback(({ item, index }) => {
         const billStatus = getBillStatus(item.state, item.visit)
         const timeStatus = TimeUtils.calculateTimeStatus(item.time)
@@ -462,8 +507,16 @@ const index = () => {
                             {item.price ? `${item.price.toLocaleString('vi-VN')}đ` : 'Miễn phí'}
                         </Text>
                     </View>
-                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.state, item.visit) }]}>
-                        <Text style={styles.statusText}>{getStatusText(item.state, item.visit)}</Text>
+                    <View style={styles.badgeContainer}>
+                        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.state, item.visit) }]}>
+                            <Text style={styles.statusText}>{getStatusText(item.state, item.visit)}</Text>
+                        </View>
+                        {/* Badge trạng thái thanh toán */}
+                        {item.payment_status && (
+                            <View style={[styles.paymentBadge, { backgroundColor: getPaymentStatusColor(item.payment_status) }]}>
+                                <Text style={styles.paymentText}>{getPaymentStatusText(item.payment_status)}</Text>
+                            </View>
+                        )}
                     </View>
                 </View>
 
@@ -479,6 +532,16 @@ const index = () => {
                         textStyle={styles.priceText}
                     />
 
+                    {/* Hiển thị phương thức thanh toán */}
+                    {item.payment_method && (
+                        <BillInfoRow
+                            icon="CreditCard"
+                            text={`Thanh toán: ${item.payment_method === 'counter' ? 'Tại quầy' :
+                                item.payment_method === 'vnpay' ? 'VNPay' :
+                                    item.payment_method === 'vip' ? 'VIP' : 'Tiền mặt'}`}
+                        />
+                    )}
+
                     {billStatus === BILL_STATUS.WAITING && (
                         <BillInfoRow
                             icon="Info"
@@ -493,17 +556,19 @@ const index = () => {
 
                 <TablesSection billId={item.id} />
 
-                {billStatus === BILL_STATUS.WAITING && timeStatus.status !== 'expired' && (
+                {/* SỬA LẠI - Chỉ hiển thị khi có pending_counter */}
+                {item.payment_status === 'pending_counter' && (
                     <ActionButtons
                         item={item}
                         timeStatus={timeStatus}
                         onCancel={handleCancelBill}
                         onArrived={handleArrived}
+                        onConfirmPayment={handleConfirmCounterPayment}
                     />
                 )}
             </View>
         )
-    }, [filteredBills.length, getBillDetails, getTableName, handleCancelBill, handleArrived])
+    }, [filteredBills.length, getBillDetails, getTableName, handleCancelBill, handleArrived, handleConfirmCounterPayment])
 
     return (
         <ScreenWrapper bg={'#FFBF00'}>
@@ -517,7 +582,7 @@ const index = () => {
                         </Pressable>
                     </View>
                 </View>
-                
+
                 {/* Admin Management Buttons */}
                 <View style={styles.adminButtonContainer}>
                     <View style={styles.adminButtonRow}>
@@ -557,16 +622,16 @@ const index = () => {
                             Đơn đặt bàn {dateFilterActive && `(${filteredBills.length})`}
                         </Text>
                         <View style={styles.headerActions}>
-                            <Pressable 
-                                onPress={showDatePanelWithAnimation} 
+                            <Pressable
+                                onPress={showDatePanelWithAnimation}
                                 style={[styles.filterButton, dateFilterActive && styles.filterButtonActive]}
                                 android_ripple={{ color: '#e3f2fd' }}
                             >
                                 <Icon.Calendar stroke={dateFilterActive ? "white" : "#666"} width={16} height={16} />
                             </Pressable>
 
-                            <Pressable 
-                                onPress={fetchBills} 
+                            <Pressable
+                                onPress={fetchBills}
                                 style={styles.refreshButton}
                                 android_ripple={{ color: 'rgba(255,255,255,0.2)' }}
                             >
@@ -888,6 +953,11 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         marginTop: 2,
     },
+    // THÊM MỚI - Badge container và payment badge
+    badgeContainer: {
+        alignItems: 'flex-end',
+        gap: hp(0.5),
+    },
     statusBadge: {
         paddingHorizontal: wp(3),
         paddingVertical: hp(0.5),
@@ -896,6 +966,16 @@ const styles = StyleSheet.create({
     statusText: {
         color: 'white',
         fontSize: hp(1.3),
+        fontWeight: '600',
+    },
+    paymentBadge: {
+        paddingHorizontal: wp(2.5),
+        paddingVertical: hp(0.3),
+        borderRadius: wp(1.5),
+    },
+    paymentText: {
+        color: 'white',
+        fontSize: hp(1.1),
         fontWeight: '600',
     },
     billInfo: {
@@ -947,27 +1027,34 @@ const styles = StyleSheet.create({
     },
     actionButtons: {
         flexDirection: 'row',
-        gap: wp(3),
+        gap: wp(2),
         marginTop: hp(1.5),
         paddingTop: hp(1.5),
         borderTopWidth: 1,
         borderTopColor: '#f0f0f0',
+        flexWrap: 'wrap',
     },
     actionButton: {
-        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         paddingVertical: hp(1.2),
+        paddingHorizontal: wp(3),
         borderRadius: wp(2),
         gap: wp(1),
         elevation: 2,
+        minWidth: wp(20),
     },
     cancelButton: {
         backgroundColor: '#e74c3c',
     },
     arrivedButton: {
         backgroundColor: '#27ae60',
+    },
+    // SỬA LẠI - Style cho nút xác nhận thanh toán
+    confirmPaymentButton: {
+        backgroundColor: '#f39c12',
+        minWidth: wp(25),
     },
     actionButtonText: {
         color: 'white',

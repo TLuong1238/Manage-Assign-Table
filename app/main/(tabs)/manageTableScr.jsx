@@ -813,7 +813,7 @@ const manageTableScr = () => {
                                         onPress={() => executeTableAction(checkoutCustomer, table.bill.id, 'Khách đã checkout')}
                                     >
                                         <MaterialIcons name="check-circle" size={18} color="white" />
-                                        <Text style={styles.actionButtonText}>Check-out</Text>
+                                        <Text style={styles.actionButtonText}>Hoàn thành</Text>
                                     </Pressable>
                                     <Pressable
                                         style={[styles.actionButton, styles.detailButton]}
